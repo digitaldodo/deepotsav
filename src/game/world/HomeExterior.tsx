@@ -7,7 +7,7 @@ import { registerInteractive, unregisterInteractive } from '../controls/FirstPer
 import { getCarvedWoodTexture, getSandstoneTexture } from '../utils/textureGenerator';
 
 export const HomeExterior: React.FC = () => {
-  const { houseDoorOpen, toggleHouseDoor, litDiyas } = useGameState();
+  const { houseDoorOpen, toggleHouseDoor, litDiyas, lightTargetDiya, pickUpDiyaStick } = useGameState();
   const leftDoorRef = useRef<THREE.Group>(null);
   const rightDoorRef = useRef<THREE.Group>(null);
 
@@ -35,12 +35,12 @@ export const HomeExterior: React.FC = () => {
     }
   });
 
-  // Register Doorway interaction
+  // Register Doorway & Porch Diyas interactions
   useEffect(() => {
     registerInteractive({
       id: 'door-toggle',
       label: houseDoorOpen ? 'Close Haveli Doors 🚪' : 'Open Haveli Doors 🚪',
-      subtext: houseDoorOpen ? 'Press [E] or Tap to close doors' : 'Press [E] or Tap to enter Baithak Living Room',
+      subtext: houseDoorOpen ? 'Click or [E] to close doors' : 'Click or [E] to enter Baithak Living Room',
       position: new THREE.Vector3(0, 1.4, 0.2),
       maxDistance: 2.8,
       action: () => {
@@ -49,10 +49,57 @@ export const HomeExterior: React.FC = () => {
       },
     });
 
+    // Porch Step Central Diya
+    registerInteractive({
+      id: 'diya-porch-1',
+      label: litDiyas['exterior-porch-1'] ? 'Take Brass Diya Stick Flame 🔥' : 'Light Porch Welcome Diya 🪔',
+      subtext: litDiyas['exterior-porch-1'] ? 'Hold lit flame wand to illuminate other diyas' : 'Click or [E] to light auspicious flame',
+      position: new THREE.Vector3(0, 0.22, 2.3),
+      maxDistance: 2.5,
+      action: () => {
+        if (!litDiyas['exterior-porch-1']) {
+          audioManager.playDiyaLight();
+          lightTargetDiya('exterior-porch-1');
+        } else {
+          audioManager.playDiyaLight();
+          pickUpDiyaStick();
+        }
+      },
+    });
+
+    // Verandah Left Diya
+    registerInteractive({
+      id: 'diya-verandah-left',
+      label: litDiyas['verandah-left'] ? 'Verandah Wall Diya (Lit) 🪔' : 'Light Left Verandah Diya 🪔',
+      subtext: litDiyas['verandah-left'] ? 'Auspicious wall niche flame' : 'Click or [E] to light flame',
+      position: new THREE.Vector3(-2.4, 1.6, 0.22),
+      maxDistance: 2.5,
+      action: () => {
+        audioManager.playDiyaLight();
+        lightTargetDiya('verandah-left');
+      },
+    });
+
+    // Verandah Right Diya
+    registerInteractive({
+      id: 'diya-verandah-right',
+      label: litDiyas['verandah-right'] ? 'Verandah Wall Diya (Lit) 🪔' : 'Light Right Verandah Diya 🪔',
+      subtext: litDiyas['verandah-right'] ? 'Auspicious wall niche flame' : 'Click or [E] to light flame',
+      position: new THREE.Vector3(2.4, 1.6, 0.22),
+      maxDistance: 2.5,
+      action: () => {
+        audioManager.playDiyaLight();
+        lightTargetDiya('verandah-right');
+      },
+    });
+
     return () => {
       unregisterInteractive('door-toggle');
+      unregisterInteractive('diya-porch-1');
+      unregisterInteractive('diya-verandah-left');
+      unregisterInteractive('diya-verandah-right');
     };
-  }, [houseDoorOpen, toggleHouseDoor]);
+  }, [houseDoorOpen, toggleHouseDoor, litDiyas, lightTargetDiya, pickUpDiyaStick]);
 
   const isPorchDiyaLit = litDiyas['exterior-porch-1'] ?? true;
   const isVerandahLeftLit = litDiyas['verandah-left'] ?? true;

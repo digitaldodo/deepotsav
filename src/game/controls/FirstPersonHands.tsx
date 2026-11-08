@@ -6,6 +6,14 @@ import {
   getMotichoorTexture,
   getSilverVarkTexture,
 } from '../utils/textureGenerator';
+import { FirecrackerModel } from '../world/FirecrackerModels';
+
+// Active spark/flame source tracker for physical fuse contact ignition
+export const activeSparkSource = {
+  active: false,
+  position: new THREE.Vector3(),
+  type: 'sparkler' as 'sparkler' | 'diya_stick',
+};
 
 export const FirstPersonHands: React.FC = () => {
   const { camera } = useThree();
@@ -170,6 +178,10 @@ export const FirstPersonHands: React.FC = () => {
       const tipOffset = new THREE.Vector3(0.22, -0.15, -0.68).applyQuaternion(camera.quaternion);
       const tipWorldPos = camera.position.clone().add(tipOffset);
 
+      activeSparkSource.active = true;
+      activeSparkSource.position.copy(tipWorldPos);
+      activeSparkSource.type = 'sparkler';
+
       addSparklerTrailPoint({
         x: tipWorldPos.x,
         y: tipWorldPos.y,
@@ -193,6 +205,14 @@ export const FirstPersonHands: React.FC = () => {
         }
         sparkParticlesRef.current.geometry.attributes.position.needsUpdate = true;
       }
+    } else if (handItem === 'diya_stick') {
+      const tipOffset = new THREE.Vector3(0.14, -0.14, -0.65).applyQuaternion(camera.quaternion);
+      const tipWorldPos = camera.position.clone().add(tipOffset);
+      activeSparkSource.active = true;
+      activeSparkSource.position.copy(tipWorldPos);
+      activeSparkSource.type = 'diya_stick';
+    } else {
+      activeSparkSource.active = false;
     }
 
     // Powder sprinkle particle update
@@ -414,18 +434,10 @@ export const FirstPersonHands: React.FC = () => {
             </group>
           )}
 
-          {/* E. HELD FIREWORK BOX */}
+          {/* E. HELD FIREWORK MODEL */}
           {handItem === 'firework' && heldFireworkType && (
-            <group position={[0.01, 0.04, -0.08]} rotation={[0.2, 0, 0]}>
-              <mesh castShadow>
-                <boxGeometry args={[0.08, 0.06, 0.08]} />
-                <meshStandardMaterial color="#D32F2F" roughness={0.5} />
-              </mesh>
-              {/* Fuse */}
-              <mesh position={[0, 0.038, 0]}>
-                <cylinderGeometry args={[0.003, 0.003, 0.02, 6]} />
-                <meshStandardMaterial color="#FFF" roughness={0.8} />
-              </mesh>
+            <group position={[0.02, 0.04, -0.12]} rotation={[0.2, 0.1, 0]} scale={0.48}>
+              <FirecrackerModel type={heldFireworkType} />
             </group>
           )}
         </group>

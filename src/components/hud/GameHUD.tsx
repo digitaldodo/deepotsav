@@ -16,6 +16,11 @@ export const GameHUD: React.FC = () => {
     heldSweetType,
     heldFireworkType,
     clearHand,
+    placementMode,
+    placementPos,
+    placementValid,
+    placeFireworkOnGround,
+    cancelPlacement,
   } = useGameState();
 
   const [journalOpen, setJournalOpen] = useState(false);
@@ -163,37 +168,107 @@ export const GameHUD: React.FC = () => {
         </div>
 
         {/* ==============================================================
-            3. REDESIGNED CONTEXTUAL INTERACTION INDICATOR
-            Positioned neatly above the lower 30% movement zone
+            3. REDESIGNED CONTEXTUAL INTERACTION INDICATOR & PLACEMENT MODE
             ============================================================== */}
-        <div
-          className="self-center pointer-events-auto transition-all duration-300 z-30"
-          style={{
-            marginBottom: isTouchDevice ? '32vh' : '12vh',
-          }}
-        >
-          {activePrompt && (
-            <button
-              onClick={() => activePrompt.action()}
-              className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/75 border border-[#D4AF37]/50 text-white backdrop-blur-md shadow-[0_0_20px_rgba(212,175,55,0.35)] active:scale-95 hover:border-[#D4AF37] transition-all cursor-pointer animate-[fade-in_0.2s_ease-out]"
-            >
-              {/* Keyboard badge on desktop only */}
-              {!isTouchDevice && (
-                <span className="px-1.5 py-0.5 rounded bg-[#D4AF37] text-black font-extrabold text-[10px]">
-                  E
+        {placementMode ? (
+          /* Placement Mode Overlay */
+          <div
+            className="self-center pointer-events-auto transition-all duration-300 z-30 flex flex-col items-center gap-2"
+            style={{
+              marginBottom: isTouchDevice ? '28vh' : '10vh',
+            }}
+          >
+            <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-black/85 border border-[#D4AF37]/60 text-white backdrop-blur-md shadow-2xl">
+              <span className="text-base">🎯</span>
+              <div className="flex flex-col text-left">
+                <span className="text-xs sm:text-sm font-bold text-[#FFE8C2]">
+                  Placing {heldFireworkType?.toUpperCase()}
                 </span>
-              )}
+                <span className="text-[11px] text-white/70">
+                  {isTouchDevice
+                    ? 'Drag over ground to aim preview'
+                    : 'Point cursor on ground to aim preview'}
+                </span>
+              </div>
 
-              {/* Action Label */}
-              <span className="text-xs sm:text-sm font-semibold text-[#FFE8C2]">
-                {formatActionPrompt()}
+              {/* Validity Pill */}
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${
+                  placementValid
+                    ? 'bg-[#00E676] text-black shadow-[0_0_8px_rgba(0,230,118,0.6)]'
+                    : 'bg-[#FF1744] text-white'
+                }`}
+              >
+                {placementValid ? 'Valid Ground' : 'Invalid Area'}
               </span>
+            </div>
 
-              {/* Small Action Arrow */}
-              <span className="text-xs text-[#D4AF37]">✦</span>
-            </button>
-          )}
-        </div>
+            {/* Actions for Mobile / Desktop */}
+            <div className="flex items-center gap-2 pointer-events-auto mt-1">
+              {isTouchDevice ? (
+                <>
+                  <button
+                    disabled={!placementValid}
+                    onClick={() => {
+                      if (placementValid) {
+                        placeFireworkOnGround(placementPos);
+                        audioManager.playPowderPickup();
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-full font-bold text-xs sm:text-sm backdrop-blur-md transition-all shadow-lg flex items-center gap-1.5 cursor-pointer ${
+                      placementValid
+                        ? 'bg-[#00E676] text-black hover:bg-[#69F0AE] active:scale-95'
+                        : 'bg-gray-600/60 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>✓ Place Here</span>
+                  </button>
+                  <button
+                    onClick={cancelPlacement}
+                    className="px-3.5 py-2 rounded-full bg-red-900/80 hover:bg-red-800 text-white font-bold text-xs sm:text-sm backdrop-blur-md transition-all shadow-md active:scale-95 cursor-pointer"
+                  >
+                    <span>✕ Cancel</span>
+                  </button>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-[11px] text-white/80 bg-black/60 px-3 py-1 rounded-full border border-white/20 backdrop-blur-md">
+                  <span>🖱️ <b>Left-Click</b> to place</span>
+                  <span>•</span>
+                  <span><b>Right-Click / [Esc]</b> to cancel</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            className="self-center pointer-events-auto transition-all duration-300 z-30"
+            style={{
+              marginBottom: isTouchDevice ? '32vh' : '12vh',
+            }}
+          >
+            {activePrompt && (
+              <button
+                onClick={() => activePrompt.action()}
+                className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/75 border border-[#D4AF37]/50 text-white backdrop-blur-md shadow-[0_0_20px_rgba(212,175,55,0.35)] active:scale-95 hover:border-[#D4AF37] transition-all cursor-pointer animate-[fade-in_0.2s_ease-out]"
+              >
+                {/* Keyboard badge on desktop only */}
+                {!isTouchDevice && (
+                  <span className="px-1.5 py-0.5 rounded bg-[#D4AF37] text-black font-extrabold text-[10px]">
+                    E
+                  </span>
+                )}
+
+                {/* Action Label */}
+                <span className="text-xs sm:text-sm font-semibold text-[#FFE8C2]">
+                  {formatActionPrompt()}
+                </span>
+
+                {/* Small Action Arrow */}
+                <span className="text-xs text-[#D4AF37]">✦</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Activity Journal Modal / Bottom Sheet */}

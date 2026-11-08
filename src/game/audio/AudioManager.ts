@@ -4,6 +4,8 @@
 // Located in /audio/deepotsav/
 // ==============================================================
 
+import { useGameState } from '../state/useGameState';
+
 class DeepotsavAudioManager {
   private ctx: AudioContext | null = null;
 
@@ -18,6 +20,9 @@ class DeepotsavAudioManager {
   private ambienceSource: AudioBufferSourceNode | null = null;
   private distantFireworksSource: AudioBufferSourceNode | null = null;
   private sparklerLoopSource: AudioBufferSourceNode | null = null;
+
+  // Active playing sound sources mapped by firework ID
+  private activeFireworkSources: Map<string, { source: AudioBufferSourceNode; gain: GainNode }> = new Map();
 
   // Decoded Audio Buffer Cache
   private buffers: Map<string, AudioBuffer> = new Map();
@@ -48,7 +53,9 @@ class DeepotsavAudioManager {
   private initContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
     if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
 
@@ -144,7 +151,7 @@ class DeepotsavAudioManager {
       this.ambienceGain.gain.setTargetAtTime(0.38, now, 0.8);
     } else {
       // Courtyard & Pathway: Balanced festive atmosphere
-      this.musicGain.gain.setTargetAtTime(0.30, now, 0.8);
+      this.musicGain.gain.setTargetAtTime(0.3, now, 0.8);
       this.ambienceGain.gain.setTargetAtTime(0.25, now, 0.8);
     }
   }
@@ -203,27 +210,76 @@ class DeepotsavAudioManager {
     this.sparklerLoopSource = null;
   }
 
-  // Play One-Shot Sound Helper
-  private playOneShot(key: string, volumeScale = 1.0): boolean {
+  // Calculate 3D positional distance attenuation
+  private calculateSpatialGain(pos?: [number, number, number]): number {
+    if (!pos) return 1.0;
+    try {
+      const playerPos = useGameState.getState().playerPosition;
+      const dx = pos[0] - playerPos[0];
+      const dy = pos[1] - playerPos[1];
+      const dz = pos[2] - playerPos[2];
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      // Natural inverse distance decay with gentle minimum cutoff
+      return Math.max(0.12, Math.min(1.0, 1.0 / (1.0 + Math.max(0, dist - 1.2) * 0.28)));
+    } catch {
+      return 1.0;
+    }
+  }
+
+  // Play One-Shot Sound Helper with optional 3D Position
+  private playOneShot(
+    key: string,
+    volumeScale = 1.0,
+    pos?: [number, number, number],
+    trackId?: string
+  ): boolean {
     if (this.isMuted) return false;
     const ctx = this.initContext();
     if (!ctx || !this.sfxGain) return false;
 
     const buf = this.buffers.get(key);
     if (!buf) {
-      return false; // will fallback to procedural synth below
+      return false; // fallback to procedural synth
     }
 
     const source = ctx.createBufferSource();
     source.buffer = buf;
 
     const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(volumeScale, ctx.currentTime);
+    const spatial = this.calculateSpatialGain(pos);
+    gainNode.gain.setValueAtTime(volumeScale * spatial, ctx.currentTime);
 
     source.connect(gainNode);
     gainNode.connect(this.sfxGain);
     source.start();
+
+    if (trackId) {
+      this.activeFireworkSources.set(trackId, { source, gain: gainNode });
+      source.onended = () => {
+        this.activeFireworkSources.delete(trackId);
+      };
+    }
     return true;
+  }
+
+  // Stop active firework sound by tracking ID
+  stopFireworkSound(id: string) {
+    const entry = this.activeFireworkSources.get(id);
+    if (entry && this.ctx) {
+      try {
+        const now = this.ctx.currentTime;
+        entry.gain.gain.setValueAtTime(entry.gain.gain.value, now);
+        entry.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        setTimeout(() => {
+          try {
+            entry.source.stop();
+          } catch {}
+          this.activeFireworkSources.delete(id);
+        }, 320);
+      } catch {
+        this.activeFireworkSources.delete(id);
+      }
+    }
   }
 
   // ==============================================================
@@ -244,7 +300,7 @@ class DeepotsavAudioManager {
 
   // 3. Diya Ignition (05_diya_ignite.mp3)
   playDiyaLight() {
-    if (this.playOneShot('diya_ignite', 0.75)) return;
+    if (this.playOneShot('diya_ignite', 0.8)) return;
     this.synthesizeWhoosh();
   }
 
@@ -256,7 +312,7 @@ class DeepotsavAudioManager {
 
   // 5. Soft Pickup (07_soft_pickup.mp3)
   playPowderPickup() {
-    if (this.playOneShot('pickup', 0.6)) return;
+    if (this.playOneShot('pickup', 0.65)) return;
     this.synthesizePickup();
   }
 
@@ -287,7 +343,7 @@ class DeepotsavAudioManager {
     setTimeout(() => this.playPujaBell(), 200);
   }
 
-  // 11. Footstep Sound
+  // 10. Footstep Sound
   playFootstep(surface: 'stone' | 'wood' | 'marble' = 'stone') {
     if (this.isMuted) return;
     const ctx = this.initContext();
@@ -324,7 +380,52 @@ class DeepotsavAudioManager {
     osc.stop(now + 0.09);
   }
 
-  // 10. Phuljhari Sparkler Continuous Loop (08_phuljhari_sparkler_loop.mp3)
+  // ==============================================================
+  // FIREWORKS AUDIO SUITE
+  // ==============================================================
+
+  // Dedicated Fuse Burning Hiss & Crackle
+  playFuseBurn(pos?: [number, number, number]) {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx || !this.sfxGain) return;
+
+    // Multi-layered fuse hiss: high frequency noise burst + sizzle clicks
+    const now = ctx.currentTime;
+    const dur = 1.1;
+    const spatial = this.calculateSpatialGain(pos);
+
+    // 1. Noise sizzle
+    const bufferSize = ctx.sampleRate * dur;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      // High-passed white noise with stochastic clicks
+      const r = (Math.random() * 2 - 1) * 0.4;
+      const click = Math.random() > 0.985 ? (Math.random() - 0.5) * 1.5 : 0;
+      data[i] = r + click;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(3200, now);
+    filter.frequency.linearRampToValueAtTime(1800, now + dur);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.35 * spatial, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + dur);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxGain);
+
+    noise.start(now);
+  }
+
+  // 11. Phuljhari Sparkler Continuous Loop (08_phuljhari_sparkler_loop.mp3)
   startSparklerLoop() {
     if (this.isMuted) return;
     const ctx = this.initContext();
@@ -338,7 +439,7 @@ class DeepotsavAudioManager {
       this.sparklerLoopSource.buffer = buf;
       this.sparklerLoopSource.loop = true;
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.65, ctx.currentTime);
+      gain.gain.setValueAtTime(0.7, ctx.currentTime);
       this.sparklerLoopSource.connect(gain);
       gain.connect(this.sfxGain);
       this.sparklerLoopSource.start();
@@ -354,52 +455,76 @@ class DeepotsavAudioManager {
     this.sparklerLoopSource = null;
   }
 
-  // 11. Chakri / Ground Spinner (09_chakri_spin_loop.mp3)
-  playChakriSpin() {
-    if (this.playOneShot('chakri', 0.85)) return;
-    this.synthesizeChakri();
+  playPhuljhadiSpark() {
+    this.startSparklerLoop();
   }
 
-  // 12. Anar / Flower Pot (10_anar_fountain.mp3)
-  playAnarFountain() {
-    if (this.playOneShot('anar', 0.9)) return;
-    this.synthesizeAnar();
+  // 12. Chakri / Ground Spinner (09_chakri_spin_loop.mp3)
+  playChakriSpin(pos?: [number, number, number], id?: string) {
+    if (this.playOneShot('chakri', 0.9, pos, id)) return;
+    this.synthesizeChakri(pos);
+  }
+  // Alias
+  playChakriSound(pos?: [number, number, number], id?: string) {
+    this.playChakriSpin(pos, id);
   }
 
-  // 13. Rocket Launch & Aerial Burst (11_rocket_launch_and_burst.mp3)
-  playRocketLaunch() {
-    if (this.playOneShot('rocket', 0.95)) return;
-    this.synthesizeRocket();
+  // 13. Anar / Flower Pot (10_anar_fountain.mp3)
+  playAnarFountain(pos?: [number, number, number], id?: string) {
+    if (this.playOneShot('anar', 0.95, pos, id)) return;
+    this.synthesizeAnar(pos);
+  }
+  // Alias
+  playAnarSound(pos?: [number, number, number], id?: string) {
+    this.playAnarFountain(pos, id);
   }
 
-  // 14. 1000-Wala Ladi Chain Crackers (12_ladi_sequential_bursts.mp3)
-  playLadiChain() {
-    if (this.playOneShot('ladi', 0.9)) return;
-    this.synthesizeLadi();
+  // 14. Rocket Launch & Aerial Burst (11_rocket_launch_and_burst.mp3)
+  playRocketLaunch(pos?: [number, number, number], id?: string) {
+    if (this.playOneShot('rocket', 1.0, pos, id)) return;
+    this.synthesizeRocket(pos);
+  }
+  // Alias
+  playRocketSound(pos?: [number, number, number], id?: string) {
+    this.playRocketLaunch(pos, id);
   }
 
-  // 15. Pencil / Sparkler Pot
-  playPencilFountain() {
-    if (this.playOneShot('anar', 0.6)) return;
-    this.synthesizeAnar();
+  // 15. 1000-Wala Ladi Chain Crackers (12_ladi_sequential_bursts.mp3)
+  playLadiChain(pos?: [number, number, number], id?: string) {
+    if (this.playOneShot('ladi', 0.95, pos, id)) return;
+    this.synthesizeLadi(pos);
+  }
+  // Alias
+  playLadiSound(pos?: [number, number, number], id?: string) {
+    this.playLadiChain(pos, id);
   }
 
-  // 16. Sita-Geeta Special Two-Stage (13_sita_geeta_special_display.mp3)
-  playSitaGeeta() {
-    if (this.playOneShot('sita_geeta', 0.95)) return;
-    this.playAnarFountain();
+  // 16. Pencil / Sparkler Pot
+  playPencilFountain(pos?: [number, number, number], id?: string) {
+    if (this.playOneShot('anar', 0.65, pos, id)) return;
+    this.synthesizeAnar(pos);
   }
 
-  // 17. Ganga-Jamuna Paired Display (14_ganga_jamuna_paired_display.mp3)
-  playGangaJamuna() {
-    if (this.playOneShot('ganga_jamuna', 0.95)) return;
-    this.playAnarFountain();
+  // 17. Sita-Geeta Special Two-Stage (13_sita_geeta_special_display.mp3)
+  playSitaGeeta(pos?: [number, number, number], id?: string) {
+    if (this.playOneShot('sita_geeta', 0.95, pos, id)) return;
+    this.playAnarFountain(pos, id);
   }
 
-  // 18. Grand Fireworks Finale (16_fireworks_finale.mp3)
-  playFinaleSequence() {
-    if (this.playOneShot('finale', 1.0)) return;
-    this.synthesizeFinale();
+  // 18. Ganga-Jamuna Paired Display (14_ganga_jamuna_paired_display.mp3)
+  playGangaJamuna(pos?: [number, number, number], id?: string) {
+    if (this.playOneShot('ganga_jamuna', 0.95, pos, id)) return;
+    this.playAnarFountain(pos, id);
+  }
+
+  // 19. Grand Fireworks Finale (16_fireworks_finale.mp3)
+  playGrandFinale(pos?: [number, number, number]) {
+    this.playFinaleSequence(pos);
+  }
+
+  playFinaleSequence(pos?: [number, number, number]) {
+    if (this.playOneShot('finale', 1.0, pos)) return;
+    this.synthesizeFinale(pos);
   }
 
   // Generic firework aerial burst
@@ -409,7 +534,7 @@ class DeepotsavAudioManager {
   }
 
   // ==============================================================
-  // RESILIENT PROCEDURAL SYNTHESIZERS (Zero-Asset Fallback)
+  // HIGH-FIDELITY PROCEDURAL SYNTHESIZERS (Zero-Asset Fallback)
   // ==============================================================
   private synthesizeBell() {
     if (this.isMuted || !this.ctx || !this.sfxGain) return;
@@ -510,68 +635,94 @@ class DeepotsavAudioManager {
   }
 
   private synthesizeSparklerLoop() {
-    // Handled gracefully via one-shot
+    // Continuous sizzle
   }
 
-  private synthesizeChakri() {
+  private synthesizeChakri(pos?: [number, number, number]) {
     if (this.isMuted || !this.ctx || !this.sfxGain) return;
     const now = this.ctx.currentTime;
+    const spatial = this.calculateSpatialGain(pos);
+
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(160, now);
-    osc.frequency.exponentialRampToValueAtTime(320, now + 1.0);
-    osc.frequency.exponentialRampToValueAtTime(60, now + 4.5);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 4.5);
+    osc.frequency.exponentialRampToValueAtTime(340, now + 1.2);
+    osc.frequency.exponentialRampToValueAtTime(65, now + 5.2);
+    gain.gain.setValueAtTime(0.24 * spatial, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 5.2);
     osc.connect(gain);
     gain.connect(this.sfxGain);
     osc.start(now);
-    osc.stop(now + 4.5);
+    osc.stop(now + 5.2);
   }
 
-  private synthesizeAnar() {
+  private synthesizeAnar(pos?: [number, number, number]) {
     if (this.isMuted || !this.ctx || !this.sfxGain) return;
     const now = this.ctx.currentTime;
+    const spatial = this.calculateSpatialGain(pos);
+
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(450, now);
-    osc.frequency.exponentialRampToValueAtTime(180, now + 5.0);
-    gain.gain.setValueAtTime(0.25, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 5.0);
+    osc.frequency.exponentialRampToValueAtTime(180, now + 5.5);
+    gain.gain.setValueAtTime(0.28 * spatial, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 5.5);
     osc.connect(gain);
     gain.connect(this.sfxGain);
     osc.start(now);
-    osc.stop(now + 5.0);
+    osc.stop(now + 5.5);
   }
 
-  private synthesizeRocket() {
+  private synthesizeRocket(pos?: [number, number, number]) {
     if (this.isMuted || !this.ctx || !this.sfxGain) return;
     const now = this.ctx.currentTime;
+    const spatial = this.calculateSpatialGain(pos);
+
+    // 1. Launch whistle
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(350, now);
     osc.frequency.exponentialRampToValueAtTime(2200, now + 1.2);
-    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.setValueAtTime(0.25 * spatial, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.3);
     osc.connect(gain);
     gain.connect(this.sfxGain);
     osc.start(now);
     osc.stop(now + 1.3);
+
+    // 2. High burst boom after 1.3s
+    setTimeout(() => {
+      if (!this.ctx || !this.sfxGain || this.isMuted) return;
+      const t = this.ctx.currentTime;
+      const bOsc = this.ctx.createOscillator();
+      const bGain = this.ctx.createGain();
+      bOsc.type = 'triangle';
+      bOsc.frequency.setValueAtTime(120, t);
+      bOsc.frequency.exponentialRampToValueAtTime(35, t + 0.6);
+      bGain.gain.setValueAtTime(0.4 * spatial, t);
+      bGain.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+      bOsc.connect(bGain);
+      bGain.connect(this.sfxGain);
+      bOsc.start(t);
+      bOsc.stop(t + 0.7);
+    }, 1300);
   }
 
-  private synthesizeLadi() {
+  private synthesizeLadi(pos?: [number, number, number]) {
     if (this.isMuted || !this.ctx || !this.sfxGain) return;
     const now = this.ctx.currentTime;
-    for (let i = 0; i < 20; i++) {
-      const popTime = now + (i / 20) * 3.5;
+    const spatial = this.calculateSpatialGain(pos);
+
+    for (let i = 0; i < 24; i++) {
+      const popTime = now + (i / 24) * 4.2;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'square';
-      osc.frequency.setValueAtTime(140 + Math.random() * 80, popTime);
-      gain.gain.setValueAtTime(0.25, popTime);
+      osc.frequency.setValueAtTime(140 + Math.random() * 90, popTime);
+      gain.gain.setValueAtTime(0.28 * spatial, popTime);
       gain.gain.exponentialRampToValueAtTime(0.001, popTime + 0.05);
       osc.connect(gain);
       gain.connect(this.sfxGain);
@@ -580,10 +731,10 @@ class DeepotsavAudioManager {
     }
   }
 
-  private synthesizeFinale() {
-    this.synthesizeAnar();
+  private synthesizeFinale(pos?: [number, number, number]) {
+    this.synthesizeAnar(pos);
     for (let i = 0; i < 6; i++) {
-      setTimeout(() => this.synthesizeRocket(), i * 900);
+      setTimeout(() => this.synthesizeRocket(pos), i * 900);
     }
   }
 }

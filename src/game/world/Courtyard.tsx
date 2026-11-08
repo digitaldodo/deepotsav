@@ -8,7 +8,7 @@ import { getSandstoneTexture, getTerracottaTileTexture } from '../utils/textureG
 import { BrassPotModel, LanternModel, PlanterPotModel, PottedPlantModel } from './ModelLoader';
 
 export const Courtyard: React.FC = () => {
-  const { litDiyas, lightTargetDiya } = useGameState();
+  const { litDiyas, lightTargetDiya, pickUpDiyaStick } = useGameState();
 
   const sandstoneTex = useMemo(() => getSandstoneTexture('#C68B59'), []);
   const tileTex = useMemo(() => getTerracottaTileTexture(), []);
@@ -17,14 +17,21 @@ export const Courtyard: React.FC = () => {
   useEffect(() => {
     registerInteractive({
       id: 'tulsi-diya',
-      label: litDiyas['tulsi-diya'] ? 'Tulsi Vrindavan Diya (Lit) 🪔' : 'Light Tulsi Shrine Diya 🪔',
-      subtext: litDiyas['tulsi-diya'] ? 'Sacred Tulsi blessed with holy light' : 'Press [E] or Tap to ignite flame with brass wand',
+      label: litDiyas['tulsi-diya']
+        ? 'Take Brass Flame Wand from Tulsi 🪔'
+        : 'Light Tulsi Shrine Diya 🪔',
+      subtext: litDiyas['tulsi-diya']
+        ? 'Hold brass lighting stick with blessed flame'
+        : 'Click or [E] to ignite flame with brass wand',
       position: new THREE.Vector3(-4.0, 0.9, 6.0),
       maxDistance: 2.6,
       action: () => {
         if (!litDiyas['tulsi-diya']) {
           audioManager.playDiyaLight();
           lightTargetDiya('tulsi-diya');
+        } else {
+          audioManager.playDiyaLight();
+          pickUpDiyaStick();
         }
       },
     });
@@ -32,7 +39,7 @@ export const Courtyard: React.FC = () => {
     return () => {
       unregisterInteractive('tulsi-diya');
     };
-  }, [litDiyas, lightTargetDiya]);
+  }, [litDiyas, lightTargetDiya, pickUpDiyaStick]);
 
   const isTulsiLit = litDiyas['tulsi-diya'] ?? true;
 

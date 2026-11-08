@@ -12,6 +12,7 @@ export const PujaCorner: React.FC = () => {
     offerFlowers,
     litDiyas,
     lightTargetDiya,
+    pickUpDiyaStick,
   } = useGameState();
 
   const bellRef = useRef<THREE.Group>(null);
@@ -54,14 +55,17 @@ export const PujaCorner: React.FC = () => {
     // 2. Brass Samai Diya
     registerInteractive({
       id: 'puja-samai',
-      label: litDiyas['puja-samai-right'] ? 'Mandir Diya (Lit) 🪔' : 'Light Mandir Brass Samai 🪔',
-      subtext: litDiyas['puja-samai-right'] ? 'Auspicious flame burning brightly' : 'Press [E] or Tap to ignite flame',
+      label: litDiyas['puja-samai-right'] ? 'Take Brass Diya Wand from Mandir 🔥' : 'Light Mandir Brass Samai 🪔',
+      subtext: litDiyas['puja-samai-right'] ? 'Hold lit flame wand to illuminate other diyas' : 'Click or [E] to ignite auspicious flame',
       position: new THREE.Vector3(-2.8, 1.0, -6.6),
       maxDistance: 2.6,
       action: () => {
         if (!litDiyas['puja-samai-right']) {
           audioManager.playDiyaLight();
           lightTargetDiya('puja-samai-right');
+        } else {
+          audioManager.playDiyaLight();
+          pickUpDiyaStick();
         }
       },
     });

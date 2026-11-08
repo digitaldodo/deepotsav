@@ -50,7 +50,7 @@ const LEVEL_COLLIDERS: BoxCollider[] = [
   { minX: -3.8, maxX: 3.8, minZ: 18.2, maxZ: 19.6, name: 'Fireworks Stall' },
 ];
 
-function checkCollides(x: number, z: number, radius = 0.38): boolean {
+export function checkCollides(x: number, z: number, radius = 0.38): boolean {
   for (const box of LEVEL_COLLIDERS) {
     if (
       x + radius > box.minX &&
@@ -98,6 +98,15 @@ export const FirstPersonController: React.FC = () => {
     reducedMotion,
     currentLocationName,
     setCurrentLocationName,
+    playerPosition,
+    setPlayerPosition,
+    placementMode,
+    placementPos,
+    placementValid,
+    setPlacementPos,
+    setPlacementValid,
+    placeFireworkOnGround,
+    cancelPlacement,
   } = useGameState();
 
   const keys = useRef({
@@ -118,9 +127,23 @@ export const FirstPersonController: React.FC = () => {
   const bobTimer = useRef(0);
   const footstepTimer = useRef(0);
 
-  // Raycaster for center-screen object detection
+  // Raycaster for center-screen object detection and pointer placement
   const raycaster = useRef(new THREE.Raycaster());
+  const placementRaycaster = useRef(new THREE.Raycaster());
   const hoveredInteractiveId = useRef<string | null>(null);
+
+  // Synchronized refs to avoid stale closures in listeners
+  const activePromptRef = useRef(activePrompt);
+  activePromptRef.current = activePrompt;
+
+  const placementModeRef = useRef(placementMode);
+  placementModeRef.current = placementMode;
+
+  const placementPosRef = useRef(placementPos);
+  placementPosRef.current = placementPos;
+
+  const placementValidRef = useRef(placementValid);
+  placementValidRef.current = placementValid;
 
   // Initial camera placement in courtyard facing the house
   useEffect(() => {
@@ -131,7 +154,56 @@ export const FirstPersonController: React.FC = () => {
     }
   }, [cinematicActive, camera]);
 
-  // Pointer lock & mouse look
+  // Support camera position teleport if state playerPosition changes significantly
+  const lastStatePos = useRef(playerPosition);
+  useEffect(() => {
+    const [px, py, pz] = playerPosition;
+    const [lx, ly, lz] = lastStatePos.current;
+    const distSq = (px - lx) ** 2 + (py - ly) ** 2 + (pz - lz) ** 2;
+    if (distSq > 0.4) {
+      camera.position.set(px, py, pz);
+      lastStatePos.current = playerPosition;
+    }
+  }, [playerPosition, camera]);
+
+  // Raycast from 2D Normalized Device Coordinates onto ground plane
+  const updateGroundPlacement = (ndcX: number, ndcY: number) => {
+    placementRaycaster.current.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.02);
+    const hitPoint = new THREE.Vector3();
+    const hit = placementRaycaster.current.ray.intersectPlane(groundPlane, hitPoint);
+
+    if (hit) {
+      // Valid celebration ground area: Open outdoor Courtyard & Fireworks Park (Z: 0.5 to 19.5, X: -5.4 to 5.4)
+      const insideZone =
+        hitPoint.z >= 0.5 && hitPoint.z <= 19.5 && Math.abs(hitPoint.x) <= 5.4;
+      const collides = checkCollides(hitPoint.x, hitPoint.z, 0.42);
+      const valid = insideZone && !collides;
+
+      setPlacementPos([hitPoint.x, 0.03, hitPoint.z]);
+      setPlacementValid(valid);
+    }
+  };
+
+  // When entering placement mode: temporarily unlock mouse cursor
+  useEffect(() => {
+    if (placementMode) {
+      if (document.pointerLockElement) {
+        try {
+          document.exitPointerLock?.();
+        } catch {}
+      }
+      // Compute default placement in front of camera
+      const lookDir = camera.getWorldDirection(new THREE.Vector3());
+      const initX = Math.max(-5.0, Math.min(5.0, camera.position.x + lookDir.x * 2.8));
+      const initZ = Math.max(12.5, Math.min(18.0, camera.position.z + lookDir.z * 2.8));
+      const valid = !checkCollides(initX, initZ, 0.42);
+      setPlacementPos([initX, 0.03, initZ]);
+      setPlacementValid(valid);
+    }
+  }, [placementMode, camera, setPlacementPos, setPlacementValid]);
+
+  // Pointer lock, mouse look, and direct click interaction
   useEffect(() => {
     const canvas = gl.domElement;
 
@@ -140,7 +212,18 @@ export const FirstPersonController: React.FC = () => {
     };
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!isPointerLocked.current || isPaused || cinematicActive) return;
+      if (isPaused || cinematicActive) return;
+
+      if (placementModeRef.current || useGameState.getState().placementMode) {
+        // In placement mode, mouse cursor is free: calculate exact raycast hit
+        const rect = canvas.getBoundingClientRect();
+        const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        updateGroundPlacement(ndcX, ndcY);
+        return;
+      }
+
+      if (!isPointerLocked.current) return;
 
       const factor = 0.0022 * mouseSensitivity;
       euler.current.y -= (e.movementX || 0) * factor;
@@ -151,33 +234,96 @@ export const FirstPersonController: React.FC = () => {
       camera.quaternion.setFromEuler(euler.current);
     };
 
-    const onClick = () => {
-      if (!isPaused && gameStarted && !cinematicActive && document.pointerLockElement !== canvas) {
+    const onClick = (e: MouseEvent) => {
+      if (isPaused || !gameStarted || cinematicActive) return;
+
+      if (placementModeRef.current) {
+        // In placement mode: Click confirms placement at pointer's world coordinates!
+        if (placementValidRef.current) {
+          placeFireworkOnGround(placementPosRef.current);
+          audioManager.playPowderPickup();
+          // Restore pointer lock after placing
+          if (!('ontouchstart' in window)) {
+            canvas.requestPointerLock?.();
+          }
+        }
+        return;
+      }
+
+      if (document.pointerLockElement === canvas) {
+        // When pointer is locked: direct left-click directly interacts with targeted object!
+        if (activePromptRef.current) {
+          activePromptRef.current.action();
+        }
+      } else {
+        // Direct click interacts immediately, then requests pointer lock
+        if (activePromptRef.current) {
+          activePromptRef.current.action();
+        }
         if (!('ontouchstart' in window)) {
           canvas.requestPointerLock?.();
         }
       }
     };
 
+    const onContextMenu = (e: MouseEvent) => {
+      if (placementModeRef.current) {
+        e.preventDefault();
+        cancelPlacement();
+        if (!('ontouchstart' in window)) {
+          canvas.requestPointerLock?.();
+        }
+      }
+    };
+
+    // Mobile touch placement listener
+    const onTouchMove = (e: TouchEvent) => {
+      if (placementModeRef.current && e.touches.length > 0) {
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        const ndcX = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+        updateGroundPlacement(ndcX, ndcY);
+      }
+    };
+
     document.addEventListener('pointerlockchange', onPointerLockChange);
-    document.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('click', onClick);
+    canvas.addEventListener('contextmenu', onContextMenu);
+    canvas.addEventListener('touchmove', onTouchMove, { passive: true });
 
     return () => {
       document.removeEventListener('pointerlockchange', onPointerLockChange);
-      document.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+      canvas.removeEventListener('touchmove', onTouchMove);
     };
-  }, [gl, isPaused, gameStarted, cinematicActive, mouseSensitivity, camera]);
-
-  // Ref to avoid stale closure for KeyE
-  const activePromptRef = useRef(activePrompt);
-  activePromptRef.current = activePrompt;
+  }, [
+    gl,
+    isPaused,
+    gameStarted,
+    cinematicActive,
+    mouseSensitivity,
+    camera,
+    placeFireworkOnGround,
+    cancelPlacement,
+  ]);
 
   // Keyboard controls
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isPaused || cinematicActive) return;
+
+      if (e.code === 'Escape' && placementModeRef.current) {
+        cancelPlacement();
+        const canvas = gl.domElement;
+        if (!('ontouchstart' in window)) {
+          canvas.requestPointerLock?.();
+        }
+        return;
+      }
 
       switch (e.code) {
         case 'KeyW':
@@ -201,7 +347,10 @@ export const FirstPersonController: React.FC = () => {
           keys.current.sprint = true;
           break;
         case 'KeyE':
-          if (activePromptRef.current) {
+          if (placementModeRef.current && placementValidRef.current) {
+            placeFireworkOnGround(placementPosRef.current);
+            audioManager.playPowderPickup();
+          } else if (activePromptRef.current) {
             activePromptRef.current.action();
           }
           break;
@@ -239,7 +388,7 @@ export const FirstPersonController: React.FC = () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [isPaused, cinematicActive, activePrompt]);
+  }, [isPaused, cinematicActive, cancelPlacement, placeFireworkOnGround, gl]);
 
   // Frame Update Loop
   useFrame((_, delta) => {
@@ -271,7 +420,10 @@ export const FirstPersonController: React.FC = () => {
       sideInput += touchInput.moveX;
     }
 
-    const yawQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), euler.current.y);
+    const yawQuat = new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      euler.current.y
+    );
     const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(yawQuat).normalize();
     const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(yawQuat).normalize();
 
@@ -321,7 +473,6 @@ export const FirstPersonController: React.FC = () => {
       footstepTimer.current += delta * (keys.current.sprint ? 1.4 : 1.0);
       if (footstepTimer.current > 0.42) {
         footstepTimer.current = 0;
-        // Determine surface
         const z = camera.position.z;
         const surface = z < 0 ? 'marble' : 'stone';
         audioManager.playFootstep(surface);
@@ -333,46 +484,57 @@ export const FirstPersonController: React.FC = () => {
 
     camera.position.y = 1.65 + headBobOffset;
 
+    // Sync player position in state for 3D audio distance calculations
+    setPlayerPosition([camera.position.x, camera.position.y, camera.position.z]);
+
     // 4. Center-Screen Raycasting for Physical Interactions
-    raycaster.current.set(camera.position, camera.getWorldDirection(new THREE.Vector3()));
-    let nearestDist = 999.0;
-    let bestInteractive: RegisteredInteractive | null = null;
-    const lookDir = camera.getWorldDirection(new THREE.Vector3());
+    if (!placementModeRef.current) {
+      raycaster.current.set(camera.position, camera.getWorldDirection(new THREE.Vector3()));
+      let nearestDist = 999.0;
+      let bestInteractive: RegisteredInteractive | null = null;
+      const lookDir = camera.getWorldDirection(new THREE.Vector3());
 
-    // Raycast towards all registered interactive objects
-    interactiveRegistry.forEach(item => {
-      const toItem = item.position.clone().sub(camera.position);
-      const dist = toItem.length();
-      const maxDist = item.maxDistance || 2.8;
+      // Raycast towards all registered interactive objects
+      interactiveRegistry.forEach(item => {
+        const toItem = item.position.clone().sub(camera.position);
+        const dist = toItem.length();
+        const maxDist = item.maxDistance || 2.8;
 
-      if (dist <= maxDist) {
-        const dir = toItem.clone().normalize();
-        const dot3D = lookDir.dot(dir);
+        if (dist <= maxDist) {
+          const dir = toItem.clone().normalize();
+          const dot3D = lookDir.dot(dir);
 
-        // Horizontal alignment check to allow comfortable eye height interaction
-        const toHoriz = new THREE.Vector2(toItem.x, toItem.z).normalize();
-        const lookHoriz = new THREE.Vector2(lookDir.x, lookDir.z).normalize();
-        const dotHoriz = lookHoriz.dot(toHoriz);
+          // Horizontal alignment check to allow comfortable eye height interaction
+          const toHoriz = new THREE.Vector2(toItem.x, toItem.z).normalize();
+          const lookHoriz = new THREE.Vector2(lookDir.x, lookDir.z).normalize();
+          const dotHoriz = lookHoriz.dot(toHoriz);
 
-        if ((dot3D > 0.65 || (dist < 2.2 && dotHoriz > 0.82)) && dist < nearestDist) {
-          nearestDist = dist;
-          bestInteractive = item;
+          if ((dot3D > 0.65 || (dist < 2.2 && dotHoriz > 0.82)) && dist < nearestDist) {
+            nearestDist = dist;
+            bestInteractive = item;
+          }
+        }
+      });
+
+      if (bestInteractive) {
+        const it = bestInteractive as RegisteredInteractive;
+        if (hoveredInteractiveId.current !== it.id) {
+          hoveredInteractiveId.current = it.id;
+          setActivePrompt({
+            id: it.id,
+            label: it.label,
+            subtext: it.subtext,
+            action: it.action,
+          });
+        }
+      } else {
+        if (hoveredInteractiveId.current !== null) {
+          hoveredInteractiveId.current = null;
+          setActivePrompt(null);
         }
       }
-    });
-
-    if (bestInteractive) {
-      const it = bestInteractive as RegisteredInteractive;
-      if (hoveredInteractiveId.current !== it.id) {
-        hoveredInteractiveId.current = it.id;
-        setActivePrompt({
-          id: it.id,
-          label: it.label,
-          subtext: it.subtext,
-          action: it.action,
-        });
-      }
     } else {
+      // In placement mode, clear normal prompt so placement instructions take priority
       if (hoveredInteractiveId.current !== null) {
         hoveredInteractiveId.current = null;
         setActivePrompt(null);

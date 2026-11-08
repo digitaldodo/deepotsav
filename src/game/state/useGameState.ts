@@ -61,9 +61,10 @@ export interface PlacedFirework {
   id: string;
   type: FireworkType;
   pos: [number, number, number];
-  state: 'placed' | 'ignited' | 'active' | 'burnt';
+  state: 'placed' | 'fuse_burning' | 'active' | 'burnt';
   timer: number;
   duration: number;
+  fuseBurnDuration: number;
   color: string;
 }
 
@@ -138,6 +139,11 @@ export interface GameState {
   grandFinaleActive: boolean;
   fireworksLaunchCount: number;
 
+  // Placement Mode
+  placementMode: boolean;
+  placementPos: [number, number, number];
+  placementValid: boolean;
+
   // ==============================================================
   // ACTIONS
   // ==============================================================
@@ -186,6 +192,11 @@ export interface GameState {
   // Fireworks Actions
   pickupFirework: (type: FireworkType) => void;
   placeFireworkOnGround: (pos: [number, number, number]) => void;
+  setPlacementMode: (active: boolean) => void;
+  setPlacementPos: (pos: [number, number, number]) => void;
+  setPlacementValid: (valid: boolean) => void;
+  cancelPlacement: () => void;
+  startFuseBurn: (id: string) => void;
   igniteFirework: (id: string) => void;
   updatePlacedFireworks: (delta: number) => void;
   triggerGrandFinale: () => void;
@@ -316,6 +327,9 @@ export const useGameState = create<GameState>((set, get) => ({
   placedFireworks: [],
   grandFinaleActive: false,
   fireworksLaunchCount: 0,
+  placementMode: false,
+  placementPos: [0, 0, 16],
+  placementValid: false,
 
   // Setters
   setGameStarted: started => set({ gameStarted: started }),
@@ -590,6 +604,22 @@ export const useGameState = create<GameState>((set, get) => ({
       handItem: 'firework',
       handAnim: 'holding',
       heldFireworkType: type,
+      placementMode: true,
+      placementValid: false,
+    });
+  },
+
+  setPlacementMode: active => set({ placementMode: active }),
+  setPlacementPos: pos => set({ placementPos: pos }),
+  setPlacementValid: valid => set({ placementValid: valid }),
+
+  cancelPlacement: () => {
+    set({
+      handItem: 'none',
+      handAnim: 'idle',
+      heldFireworkType: null,
+      placementMode: false,
+      placementValid: false,
     });
   },
 
@@ -602,11 +632,11 @@ export const useGameState = create<GameState>((set, get) => ({
       phuljhari: 12,
       chakri: 5.5,
       anar: 6.0,
-      rocket: 2.5,
-      ladi: 4.5,
+      rocket: 3.2,
+      ladi: 4.8,
       pencil: 4.0,
-      sita_geeta: 6.0,
-      ganga_jamuna: 6.0,
+      sita_geeta: 6.5,
+      ganga_jamuna: 6.5,
     };
 
     const newFirework: PlacedFirework = {
@@ -616,6 +646,7 @@ export const useGameState = create<GameState>((set, get) => ({
       state: 'placed',
       timer: 0,
       duration: durations[type],
+      fuseBurnDuration: 1.1,
       color: type === 'chakri' ? '#FF5722' : type === 'anar' ? '#FFD700' : '#FF4081',
     };
 
@@ -624,7 +655,19 @@ export const useGameState = create<GameState>((set, get) => ({
       handItem: 'none',
       handAnim: 'idle',
       heldFireworkType: null,
+      placementMode: false,
+      placementValid: false,
     });
+  },
+
+  startFuseBurn: (id: string) => {
+    set(state => ({
+      placedFireworks: state.placedFireworks.map(f =>
+        f.id === id && f.state === 'placed'
+          ? { ...f, state: 'fuse_burning', timer: 0 }
+          : f
+      ),
+    }));
   },
 
   igniteFirework: (id: string) => {
@@ -640,6 +683,20 @@ export const useGameState = create<GameState>((set, get) => ({
     set(state => ({
       placedFireworks: state.placedFireworks
         .map((f): PlacedFirework => {
+          if (f.state === 'fuse_burning') {
+            const nextTimer = f.timer + delta;
+            if (nextTimer >= (f.fuseBurnDuration || 1.1)) {
+              return {
+                ...f,
+                state: 'active',
+                timer: 0,
+              };
+            }
+            return {
+              ...f,
+              timer: nextTimer,
+            };
+          }
           if (f.state === 'active') {
             const nextTimer = f.timer + delta;
             const nextState: 'active' | 'burnt' = nextTimer >= f.duration ? 'burnt' : 'active';
@@ -651,7 +708,7 @@ export const useGameState = create<GameState>((set, get) => ({
           }
           return f;
         })
-        .filter(f => f.state !== 'burnt' || f.timer < f.duration + 4),
+        .filter(f => f.state !== 'burnt' || f.timer < f.duration + 5),
     }));
   },
 
@@ -726,6 +783,8 @@ export const useGameState = create<GameState>((set, get) => ({
     sparklerTrails: [],
     placedFireworks: [],
     grandFinaleActive: false,
+    placementMode: false,
+    placementValid: false,
     handItem: 'none',
     handAnim: 'idle',
     heldSweetType: null,
