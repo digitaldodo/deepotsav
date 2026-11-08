@@ -1,6 +1,4 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useGameState } from '../state/useGameState';
-import { audioManager } from '../audio/AudioManager';
 
 // Global exported touch control vectors for the 3D loop
 export const touchInput = {
@@ -12,17 +10,22 @@ export const touchInput = {
 };
 
 export const MobileVirtualControls: React.FC = () => {
-  const { activePrompt, isPaused, setPaused, soundEnabled, setSoundEnabled } = useGameState();
-  const [joystickActive, setJoystickActive] = useState(false);
-  const [knobPos, setKnobPos] = useState({ x: 0, y: 0 });
-  const joystickBaseRef = useRef<HTMLDivElement>(null);
-  const touchIdRef = useRef<number | null>(null);
+  // Joystick dynamic floating state
+  const [joystickVisible, setJoystickVisible] = useState(false);
+  const [joystickCenter, setJoystickCenter] = useState({ x: 0, y: 0 });
+  const [knobOffset, setKnobOffset] = useState({ x: 0, y: 0 });
 
-  // Look touch tracking
-  const lookTouchIdRef = useRef<number | null>(null);
+  const movePointerId = useRef<number | null>(null);
+  const startPos = useRef<{ x: number; y: number } | null>(null);
+
+  // Camera look tracking in upper 70%
+  const lookPointerId = useRef<number | null>(null);
   const lastLookPos = useRef<{ x: number; y: number } | null>(null);
 
-  // Reset touch on unmount
+  // Maximum joystick throw radius in pixels
+  const MAX_RADIUS = 48;
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       touchInput.moveX = 0;
@@ -33,168 +36,197 @@ export const MobileVirtualControls: React.FC = () => {
     };
   }, []);
 
-  // Joystick touch handlers
-  const handleJoystickStart = (e: React.TouchEvent<HTMLDivElement>) => {
+  // ==============================================================
+  // 1. DYNAMIC VIRTUAL JOYSTICK HANDLERS (LOWER 30% OF SCREEN)
+  // ==============================================================
+  const handleMovePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Only capture first touch in move zone
+    if (movePointerId.current !== null) return;
     e.preventDefault();
-    const touch = e.changedTouches[0];
-    touchIdRef.current = touch.identifier;
-    setJoystickActive(true);
-    handleJoystickMove(e);
+    e.stopPropagation();
+
+    const pointerId = e.pointerId;
+    movePointerId.current = pointerId;
+    (e.currentTarget as HTMLElement).setPointerCapture(pointerId);
+
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+
+    startPos.current = { x: clientX, y: clientY };
+    setJoystickCenter({ x: clientX, y: clientY });
+    setKnobOffset({ x: 0, y: 0 });
+    setJoystickVisible(true);
   };
 
-  const handleJoystickMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!joystickBaseRef.current || touchIdRef.current === null) return;
-    const touch = Array.from(e.changedTouches).find(t => t.identifier === touchIdRef.current);
-    if (!touch) return;
+  const handleMovePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (movePointerId.current !== e.pointerId || !startPos.current) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-    const rect = joystickBaseRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const maxRadius = rect.width / 2;
+    const dx = e.clientX - startPos.current.x;
+    const dy = e.clientY - startPos.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
-    const deltaX = touch.clientX - centerX;
-    const deltaY = touch.clientY - centerY;
-    const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const clampedDist = Math.min(dist, maxRadius);
-    const angle = Math.atan2(deltaY, deltaX);
+    const clampedDist = Math.min(dist, MAX_RADIUS);
+    const angle = Math.atan2(dy, dx);
 
     const knobX = Math.cos(angle) * clampedDist;
     const knobY = Math.sin(angle) * clampedDist;
 
-    setKnobPos({ x: knobX, y: knobY });
-    touchInput.moveX = knobX / maxRadius;
-    touchInput.moveY = -knobY / maxRadius; // inverted so up = forward
-    touchInput.isMoving = dist > 4;
-  };
+    setKnobOffset({ x: knobX, y: knobY });
 
-  const handleJoystickEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    const touch = Array.from(e.changedTouches).find(t => t.identifier === touchIdRef.current);
-    if (touch) {
-      touchIdRef.current = null;
-      setJoystickActive(false);
-      setKnobPos({ x: 0, y: 0 });
+    // Normalized movement vector (deadzone of 4px)
+    if (dist > 4) {
+      touchInput.moveX = knobX / MAX_RADIUS;
+      touchInput.moveY = -knobY / MAX_RADIUS; // up is forward (+Z direction in Three)
+      touchInput.isMoving = true;
+    } else {
       touchInput.moveX = 0;
       touchInput.moveY = 0;
       touchInput.isMoving = false;
     }
   };
 
-  // Right-side swipe look handlers
-  const handleLookStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    const touch = e.changedTouches[0];
-    lookTouchIdRef.current = touch.identifier;
-    lastLookPos.current = { x: touch.clientX, y: touch.clientY };
+  const handleMovePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (movePointerId.current !== e.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    movePointerId.current = null;
+    startPos.current = null;
+    setJoystickVisible(false);
+    setKnobOffset({ x: 0, y: 0 });
+
+    touchInput.moveX = 0;
+    touchInput.moveY = 0;
+    touchInput.isMoving = false;
   };
 
-  const handleLookMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (lookTouchIdRef.current === null || !lastLookPos.current) return;
-    const touch = Array.from(e.changedTouches).find(t => t.identifier === lookTouchIdRef.current);
-    if (!touch) return;
+  // ==============================================================
+  // 2. CAMERA LOOK HANDLERS (UPPER 70% OF SCREEN)
+  // ==============================================================
+  const handleLookPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Only capture first touch in look zone
+    if (lookPointerId.current !== null) return;
+    // Don't intercept touches if user clicked on a button or menu
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, [role="button"]')) return;
 
-    const dx = touch.clientX - lastLookPos.current.x;
-    const dy = touch.clientY - lastLookPos.current.y;
+    e.preventDefault();
+    e.stopPropagation();
 
-    touchInput.lookDeltaX += dx * 0.0055;
-    touchInput.lookDeltaY += dy * 0.0055;
+    const pointerId = e.pointerId;
+    lookPointerId.current = pointerId;
+    (e.currentTarget as HTMLElement).setPointerCapture(pointerId);
 
-    lastLookPos.current = { x: touch.clientX, y: touch.clientY };
+    lastLookPos.current = { x: e.clientX, y: e.clientY };
   };
 
-  const handleLookEnd = (e: React.TouchEvent<HTMLDivElement>) => {
-    const touch = Array.from(e.changedTouches).find(t => t.identifier === lookTouchIdRef.current);
-    if (touch) {
-      lookTouchIdRef.current = null;
-      lastLookPos.current = null;
-    }
+  const handleLookPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (lookPointerId.current !== e.pointerId || !lastLookPos.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const dx = e.clientX - lastLookPos.current.x;
+    const dy = e.clientY - lastLookPos.current.y;
+
+    // Apply smooth look deltas
+    touchInput.lookDeltaX += dx * 0.0048;
+    touchInput.lookDeltaY += dy * 0.0048;
+
+    lastLookPos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleLookPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (lookPointerId.current !== e.pointerId) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    lookPointerId.current = null;
+    lastLookPos.current = null;
   };
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-30 select-none overflow-hidden touch-none">
-      {/* Top Mobile Quick Audio & Pause Controls Bar */}
-      <div className="absolute top-3 right-3 flex items-center gap-2 pointer-events-auto">
-        <button
-          onClick={() => {
-            const next = !soundEnabled;
-            setSoundEnabled(next);
-            audioManager.setMuted(!next);
-            if (next) audioManager.playDiyaLight();
-          }}
-          className="w-11 h-11 rounded-full bg-black/60 border border-[#D4AF37]/30 text-white flex items-center justify-center text-lg active:scale-95 shadow-lg backdrop-blur-md"
-          aria-label={soundEnabled ? 'Mute' : 'Enable Sound'}
-        >
-          {soundEnabled ? '🔊' : '🔇'}
-        </button>
-
-        <button
-          onClick={() => setPaused(!isPaused)}
-          className="w-11 h-11 rounded-full bg-black/60 border border-[#D4AF37]/30 text-[#D4AF37] font-bold flex items-center justify-center text-sm active:scale-95 shadow-lg backdrop-blur-md"
-          aria-label="Pause Menu"
-        >
-          ⏸
-        </button>
-      </div>
-
-      {/* Left Virtual Joystick Area */}
+    <div
+      className="absolute inset-0 w-full h-full pointer-events-none select-none overflow-hidden touch-none z-20"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+      }}
+    >
+      {/* ==============================================================
+          UPPER 70%: CAMERA LOOK TOUCH ZONE
+          ============================================================== */}
       <div
-        className="absolute bottom-6 left-6 w-32 h-32 sm:w-36 sm:h-36 rounded-full bg-black/40 border-2 border-white/20 pointer-events-auto flex items-center justify-center backdrop-blur-sm touch-none"
-        ref={joystickBaseRef}
-        onTouchStart={handleJoystickStart}
-        onTouchMove={handleJoystickMove}
-        onTouchEnd={handleJoystickEnd}
-        onTouchCancel={handleJoystickEnd}
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-      >
-        {/* Knob */}
+        className="absolute top-0 left-0 w-full pointer-events-auto touch-none"
+        style={{ height: '70%' }}
+        onPointerDown={handleLookPointerDown}
+        onPointerMove={handleLookPointerMove}
+        onPointerUp={handleLookPointerUp}
+        onPointerCancel={handleLookPointerUp}
+      />
+
+      {/* ==============================================================
+          LOWER 30%: DYNAMIC JOYSTICK FULL-WIDTH MOVEMENT TOUCH ZONE
+          ============================================================== */}
+      <div
+        className="absolute bottom-0 left-0 w-full pointer-events-auto touch-none"
+        style={{ height: '30%' }}
+        onPointerDown={handleMovePointerDown}
+        onPointerMove={handleMovePointerMove}
+        onPointerUp={handleMovePointerUp}
+        onPointerCancel={handleMovePointerUp}
+      />
+
+      {/* ==============================================================
+          FLOATING DYNAMIC JOYSTICK (VISIBLE ONLY WHILE TOUCHING LOWER 30%)
+          ============================================================== */}
+      {joystickVisible && (
         <div
-          className={`w-14 h-14 rounded-full border border-[#D4AF37] transition-all shadow-md flex items-center justify-center ${
-            joystickActive ? 'bg-[#D4AF37] text-black shadow-[#D4AF37]/60 scale-105' : 'bg-white/25 text-white/80'
-          }`}
+          className="fixed pointer-events-none transition-opacity duration-150 z-30"
           style={{
-            transform: `translate(${knobPos.x}px, ${knobPos.y}px)`,
+            left: `${joystickCenter.x}px`,
+            top: `${joystickCenter.y}px`,
+            transform: 'translate(-50%, -50%)',
           }}
         >
-          <span className="text-[11px] font-extrabold tracking-tighter">WALK</span>
-        </div>
-      </div>
-
-      {/* Right Screen Swipe Look Surface */}
-      <div
-        className="absolute top-16 right-0 bottom-28 w-1/2 pointer-events-auto touch-none"
-        onTouchStart={handleLookStart}
-        onTouchMove={handleLookMove}
-        onTouchEnd={handleLookEnd}
-        onTouchCancel={handleLookEnd}
-      >
-        <div className="absolute bottom-3 right-4 text-[10px] text-white/30 tracking-wider pointer-events-none uppercase font-semibold">
-          Drag to Look Around 👁️
-        </div>
-      </div>
-
-      {/* Contextual Interaction Floating Button (>54px touch target) */}
-      {activePrompt && (
-        <div
-          className="absolute bottom-8 right-6 pointer-events-auto animate-[bounce-in_0.35s_ease-out]"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-        >
-          <button
-            onClick={() => activePrompt.action()}
-            className="px-6 py-3.5 rounded-3xl bg-gradient-to-r from-[#D4AF37] via-[#FFA500] to-[#FF6B35] text-[#0A0A1A] font-extrabold text-sm shadow-2xl active:scale-95 flex items-center gap-2.5 border-2 border-white/50"
+          {/* Outer Base Ring (Semi-transparent dark glass with subtle gold accent) */}
+          <div
+            className="rounded-full flex items-center justify-center backdrop-blur-sm shadow-2xl"
             style={{
-              minWidth: '160px',
-              minHeight: '54px',
-              boxShadow: '0 0 30px rgba(212, 175, 55, 0.7)',
+              width: `${MAX_RADIUS * 2}px`,
+              height: `${MAX_RADIUS * 2}px`,
+              background: 'radial-gradient(circle, rgba(0,0,0,0.45) 0%, rgba(20,15,10,0.65) 100%)',
+              border: '1.5px solid rgba(212, 175, 55, 0.45)',
+              boxShadow: '0 0 18px rgba(212, 175, 55, 0.25), inset 0 0 12px rgba(0,0,0,0.6)',
             }}
           >
-            <span className="text-xl">✨</span>
-            <div className="text-left">
-              <div className="leading-tight text-xs sm:text-sm">{activePrompt.label}</div>
-              {activePrompt.subtext && (
-                <div className="text-[10px] opacity-85 font-normal leading-tight mt-0.5">
-                  {activePrompt.subtext}
-                </div>
-              )}
-            </div>
-          </button>
+            {/* Subtle center crosshair guide */}
+            <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]/40" />
+
+            {/* Inner Thumb Knob */}
+            <div
+              className="absolute rounded-full shadow-lg"
+              style={{
+                width: '42px',
+                height: '42px',
+                transform: `translate(${knobOffset.x}px, ${knobOffset.y}px)`,
+                background: 'radial-gradient(circle at 35% 35%, #FFDF73 0%, #D4AF37 60%, #996515 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.6)',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.5), 0 0 12px rgba(212, 175, 55, 0.5)',
+              }}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -70,12 +70,17 @@ export interface PlacedFirework {
 export interface GameState {
   // Game Flow
   gameStarted: boolean;
+  cinematicActive: boolean;
+  cinematicPhase: number; // 1 to 6
   isPaused: boolean;
   showJournal: boolean;
   graphicsQuality: GraphicsQuality;
   soundEnabled: boolean;
   soundVolume: number;
   mobileControlMode: 'joystick' | 'tap';
+  mouseSensitivity: number;
+  touchSensitivity: number;
+  reducedMotion: boolean;
 
   // Navigation
   playerPosition: [number, number, number];
@@ -137,6 +142,14 @@ export interface GameState {
   // ACTIONS
   // ==============================================================
   setGameStarted: (started: boolean) => void;
+  setCinematicActive: (active: boolean) => void;
+  setCinematicPhase: (phase: number) => void;
+  skipCinematic: () => void;
+  enterCelebration: () => void;
+  replayCinematic: () => void;
+  setMouseSensitivity: (val: number) => void;
+  setTouchSensitivity: (val: number) => void;
+  setReducedMotion: (val: boolean) => void;
   setPaused: (paused: boolean) => void;
   setShowJournal: (show: boolean) => void;
   setGraphicsQuality: (quality: GraphicsQuality) => void;
@@ -244,12 +257,17 @@ function getStoredFreehand(): FreehandPoint[] {
 export const useGameState = create<GameState>((set, get) => ({
   // Defaults
   gameStarted: false,
+  cinematicActive: true,
+  cinematicPhase: 1,
   isPaused: false,
   showJournal: false,
   graphicsQuality: 'medium',
   soundEnabled: false,
   soundVolume: 0.7,
   mobileControlMode: 'joystick',
+  mouseSensitivity: 1.0,
+  touchSensitivity: 1.0,
+  reducedMotion: false,
 
   playerPosition: [0, 1.6, 9],
   currentLocationName: 'Front Gate & Courtyard',
@@ -301,6 +319,20 @@ export const useGameState = create<GameState>((set, get) => ({
 
   // Setters
   setGameStarted: started => set({ gameStarted: started }),
+  setCinematicActive: active => set({ cinematicActive: active }),
+  setCinematicPhase: phase => set({ cinematicPhase: phase }),
+  skipCinematic: () => {
+    set({ cinematicActive: false, gameStarted: true, cinematicPhase: 6 });
+  },
+  enterCelebration: () => {
+    set({ cinematicActive: false, gameStarted: true, cinematicPhase: 6 });
+  },
+  replayCinematic: () => {
+    set({ cinematicActive: true, isPaused: false, cinematicPhase: 1 });
+  },
+  setMouseSensitivity: val => set({ mouseSensitivity: val }),
+  setTouchSensitivity: val => set({ touchSensitivity: val }),
+  setReducedMotion: val => set({ reducedMotion: val }),
   setPaused: paused => set({ isPaused: paused }),
   setShowJournal: show => set({ showJournal: show }),
   setGraphicsQuality: quality => set({ graphicsQuality: quality }),

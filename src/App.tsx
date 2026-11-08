@@ -3,21 +3,24 @@ import { useGameState } from './game/state/useGameState';
 import { DiwaliWorld } from './game/world/DiwaliWorld';
 import { GameHUD } from './components/hud/GameHUD';
 import { MobileVirtualControls } from './game/controls/MobileVirtualControls';
-import { IntroScreen } from './components/menus/IntroScreen';
+import { CinematicOverlay } from './components/menus/CinematicOverlay';
 import { PauseMenu } from './components/menus/PauseMenu';
 
 export const App: React.FC = () => {
-  const { gameStarted } = useGameState();
+  const { cinematicActive } = useGameState();
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
-    const hasTouch = 'ontouchstart' in window || (Boolean(navigator.maxTouchPoints) && navigator.maxTouchPoints > 0);
+    const hasTouch =
+      'ontouchstart' in window ||
+      (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+      (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
     setIsTouchDevice(hasTouch);
   }, []);
 
   return (
     <div
-      className="fixed inset-0 w-full h-full overflow-hidden bg-[#0A0A1A] select-none touch-none"
+      className="fixed inset-0 w-full h-full overflow-hidden bg-[#0A0F26] select-none touch-none"
       style={{
         position: 'fixed',
         inset: 0,
@@ -26,14 +29,14 @@ export const App: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* 3D First-Person Diwali Canvas */}
+      {/* 3D Diwali World Canvas */}
       <DiwaliWorld />
 
-      {/* Intro Screen */}
-      {!gameStarted && <IntroScreen />}
+      {/* Cinematic Happy Diwali Intro Overlay */}
+      {cinematicActive && <CinematicOverlay />}
 
-      {/* Active Game State Overlays */}
-      {gameStarted && (
+      {/* Active First-Person Gameplay Overlays */}
+      {!cinematicActive && (
         <>
           <GameHUD />
           {isTouchDevice && <MobileVirtualControls />}

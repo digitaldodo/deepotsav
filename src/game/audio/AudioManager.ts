@@ -287,6 +287,43 @@ class DeepotsavAudioManager {
     setTimeout(() => this.playPujaBell(), 200);
   }
 
+  // 11. Footstep Sound
+  playFootstep(surface: 'stone' | 'wood' | 'marble' = 'stone') {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    if (surface === 'wood') {
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(95 + Math.random() * 20, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.08);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    } else if (surface === 'marble') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(140 + Math.random() * 30, now);
+      osc.frequency.exponentialRampToValueAtTime(70, now + 0.06);
+      gain.gain.setValueAtTime(0.07, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    } else {
+      // stone / terracotta
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(110 + Math.random() * 25, now);
+      osc.frequency.exponentialRampToValueAtTime(50, now + 0.07);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+    }
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  }
+
   // 10. Phuljhari Sparkler Continuous Loop (08_phuljhari_sparkler_loop.mp3)
   startSparklerLoop() {
     if (this.isMuted) return;

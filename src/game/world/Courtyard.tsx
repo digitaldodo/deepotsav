@@ -1,324 +1,204 @@
-import React from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { useGameState } from '../state/useGameState';
 import { audioManager } from '../audio/AudioManager';
 import { CourtyardRangoli } from './CourtyardRangoli';
+import { registerInteractive, unregisterInteractive } from '../controls/FirstPersonController';
+import { getSandstoneTexture, getTerracottaTileTexture } from '../utils/textureGenerator';
+import { BrassPotModel, LanternModel, PlanterPotModel, PottedPlantModel } from './ModelLoader';
 
 export const Courtyard: React.FC = () => {
-  const {
-    playerPosition,
-    setActivePrompt,
-    litDiyas,
-    lightTargetDiya,
-  } = useGameState();
+  const { litDiyas, lightTargetDiya } = useGameState();
 
-  // Proximity checks for Tulsi and Pillar Diyas
-  useFrame(() => {
-    // 1. Proximity to Tulsi Kyari at [ -5, 0, 6 ]
-    const distToTulsi = Math.hypot(playerPosition[0] - (-5), playerPosition[2] - 6);
-    if (distToTulsi < 2.2 && !litDiyas['tulsi-diya']) {
-      setActivePrompt({
-        id: 'light-tulsi-diya',
-        label: 'Light Tulsi Shrine Diya 🪔',
-        subtext: 'Press [E] or Tap to ignite flame with brass stick',
-        action: () => {
+  const sandstoneTex = useMemo(() => getSandstoneTexture('#C68B59'), []);
+  const tileTex = useMemo(() => getTerracottaTileTexture(), []);
+
+  // Register Tulsi Diya & Courtyard Lantern interactions
+  useEffect(() => {
+    registerInteractive({
+      id: 'tulsi-diya',
+      label: litDiyas['tulsi-diya'] ? 'Tulsi Vrindavan Diya (Lit) 🪔' : 'Light Tulsi Shrine Diya 🪔',
+      subtext: litDiyas['tulsi-diya'] ? 'Sacred Tulsi blessed with holy light' : 'Press [E] or Tap to ignite flame with brass wand',
+      position: new THREE.Vector3(-4.0, 0.9, 6.0),
+      maxDistance: 2.6,
+      action: () => {
+        if (!litDiyas['tulsi-diya']) {
           audioManager.playDiyaLight();
           lightTargetDiya('tulsi-diya');
-        },
-      });
-      return;
-    }
+        }
+      },
+    });
 
-    // 2. Proximity to Courtyard Pillar Diya at [ 5, 0, 6 ]
-    const distToCourtyardDiya = Math.hypot(playerPosition[0] - 5, playerPosition[2] - 6);
-    if (distToCourtyardDiya < 2.2 && !litDiyas['courtyard-pillar-diya']) {
-      setActivePrompt({
-        id: 'light-courtyard-diya',
-        label: 'Light Lantern Pillar Diya 🪔',
-        subtext: 'Press [E] or Tap to ignite flame',
-        action: () => {
-          audioManager.playDiyaLight();
-          lightTargetDiya('courtyard-pillar-diya');
-        },
-      });
-      return;
-    }
-  });
+    return () => {
+      unregisterInteractive('tulsi-diya');
+    };
+  }, [litDiyas, lightTargetDiya]);
 
-  const isTulsiLit = litDiyas['tulsi-diya'] ?? false;
-  const isPillarLit = litDiyas['courtyard-pillar-diya'] ?? false;
+  const isTulsiLit = litDiyas['tulsi-diya'] ?? true;
 
   return (
     <group position={[0, 0, 0]}>
       {/* ==============================================================
-          1. COURTYARD PAVING: AGED JAISALMER SANDSTONE & RED TERRACOTTA
+          1. COURTYARD PAVING: TERRACOTTA TILES & RED SANDSTONE AISLE
           ============================================================== */}
-      {/* Main Courtyard Floor (Z: 0 to 14) */}
-      <mesh position={[0, 0, 7]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[28, 14]} />
-        <meshStandardMaterial color="#C59B76" roughness={0.68} />
+      {/* Main Courtyard Floor (X: -6.0 to 6.0, Z: 0.0 to 12.0) */}
+      <mesh position={[0, 0, 6.0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[12.0, 12.0]} />
+        <meshStandardMaterial map={tileTex} roughness={0.7} />
       </mesh>
 
-      {/* Decorative Red Sandstone Central Aisle Leading to Haveli Porch */}
-      <mesh position={[0, 0.01, 7]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[4.2, 14]} />
-        <meshStandardMaterial color="#8F5435" roughness={0.65} />
+      {/* Central Sandstone Aisle leading from Haveli Porch to Garden Gateway */}
+      <mesh position={[0, 0.008, 6.0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[3.2, 12.0]} />
+        <meshStandardMaterial map={sandstoneTex} roughness={0.65} />
       </mesh>
-
-      {/* Ornamental Floral Border Inlay along Aisle */}
-      {[-2.05, 2.05].map((bx, bi) => (
-        <mesh key={`aisleborder-${bi}`} position={[bx, 0.012, 7]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-          <planeGeometry args={[0.18, 14]} />
-          <meshStandardMaterial color="#DAA520" metalness={0.7} roughness={0.3} />
+      {/* Gold Trim Inlays along Aisle */}
+      {[-1.6, 1.6].map((bx, bi) => (
+        <mesh key={`cborder-${bi}`} position={[bx, 0.012, 6.0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.08, 12.0]} />
+          <meshStandardMaterial color="#D4AF37" metalness={0.9} roughness={0.25} />
         </mesh>
       ))}
 
       {/* ==============================================================
           2. CARVED COURTYARD BOUNDARY WALLS WITH JAALI SCREENS & NICHES
           ============================================================== */}
-      {/* Left Courtyard Wall with Jaali Screen & Diya Niches */}
-      <group position={[-14, 0, 7]}>
-        {/* Main Sandstone Wall */}
-        <mesh position={[0, 1.6, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.5, 3.2, 14]} />
-          <meshStandardMaterial color="#C68B59" roughness={0.7} />
+      {/* Left Courtyard Wall (X: -6.0) */}
+      <group position={[-6.0, 0, 6.0]}>
+        <mesh position={[0, 1.8, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.4, 3.6, 12.0]} />
+          <meshStandardMaterial map={sandstoneTex} roughness={0.7} />
         </mesh>
-        {/* Ornamental Jaali Screen Parapet on Wall Top */}
-        <mesh position={[0, 3.4, 0]} castShadow>
-          <boxGeometry args={[0.2, 0.6, 14]} />
+        {/* Decorative Cornice */}
+        <mesh position={[0, 3.65, 0]} castShadow>
+          <boxGeometry args={[0.5, 0.15, 12.0]} />
           <meshStandardMaterial color="#8F4B23" roughness={0.6} />
         </mesh>
-        {/* Wall Niches with Lit Terracotta Diyas */}
-        {[-4.5, 0, 4.5].map((wz, wi) => (
-          <group key={`lwall-niche-${wi}`} position={[0.22, 1.8, wz]}>
-            <mesh castShadow>
-              <boxGeometry args={[0.15, 0.8, 0.6]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.6} />
+        {/* Lit Terracotta Diyas in Wall Niches */}
+        {[-3.5, 0, 3.5].map((wz, wi) => (
+          <group key={`lwniche-${wi}`} position={[0.22, 1.8, wz]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[0.12, 0.5, 0.35]} />
+              <meshStandardMaterial color="#4A2306" roughness={0.6} />
             </mesh>
-            <mesh position={[0.08, -0.28, 0]} castShadow>
-              <cylinderGeometry args={[0.07, 0.045, 0.05, 10]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.7} />
+            <mesh position={[0.05, -0.18, 0]} castShadow>
+              <cylinderGeometry args={[0.065, 0.04, 0.038, 10]} />
+              <meshStandardMaterial color="#A35334" roughness={0.75} />
             </mesh>
-            <mesh position={[0.08, -0.22, 0]}>
-              <sphereGeometry args={[0.035, 8, 8]} />
-              <meshStandardMaterial color="#FF5722" emissive="#FFA500" emissiveIntensity={3.2} />
+            <mesh position={[0.05, -0.15, 0]}>
+              <coneGeometry args={[0.016, 0.045, 8]} />
+              <meshBasicMaterial color="#FF9900" />
             </mesh>
-            <pointLight position={[0.2, -0.15, 0]} color="#FFA500" intensity={0.6} distance={3} decay={2} />
+            <pointLight color="#FF9900" intensity={1.4} distance={2.4} decay={2} />
           </group>
         ))}
       </group>
 
-      {/* Right Courtyard Wall with Jaali Screen & Diya Niches */}
-      <group position={[14, 0, 7]}>
-        <mesh position={[0, 1.6, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.5, 3.2, 14]} />
-          <meshStandardMaterial color="#C68B59" roughness={0.7} />
+      {/* Right Courtyard Wall (X: 6.0) */}
+      <group position={[6.0, 0, 6.0]}>
+        <mesh position={[0, 1.8, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.4, 3.6, 12.0]} />
+          <meshStandardMaterial map={sandstoneTex} roughness={0.7} />
         </mesh>
-        <mesh position={[0, 3.4, 0]} castShadow>
-          <boxGeometry args={[0.2, 0.6, 14]} />
+        <mesh position={[0, 3.65, 0]} castShadow>
+          <boxGeometry args={[0.5, 0.15, 12.0]} />
           <meshStandardMaterial color="#8F4B23" roughness={0.6} />
         </mesh>
-        {[-4.5, 0, 4.5].map((wz, wi) => (
-          <group key={`rwall-niche-${wi}`} position={[-0.22, 1.8, wz]}>
-            <mesh castShadow>
-              <boxGeometry args={[0.15, 0.8, 0.6]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.6} />
+        {[-3.5, 0, 3.5].map((wz, wi) => (
+          <group key={`rwniche-${wi}`} position={[-0.22, 1.8, wz]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[0.12, 0.5, 0.35]} />
+              <meshStandardMaterial color="#4A2306" roughness={0.6} />
             </mesh>
-            <mesh position={[-0.08, -0.28, 0]} castShadow>
-              <cylinderGeometry args={[0.07, 0.045, 0.05, 10]} />
-              <meshStandardMaterial color="#8B4513" roughness={0.7} />
+            <mesh position={[-0.05, -0.18, 0]} castShadow>
+              <cylinderGeometry args={[0.065, 0.04, 0.038, 10]} />
+              <meshStandardMaterial color="#A35334" roughness={0.75} />
             </mesh>
-            <mesh position={[-0.08, -0.22, 0]}>
-              <sphereGeometry args={[0.035, 8, 8]} />
-              <meshStandardMaterial color="#FF5722" emissive="#FFA500" emissiveIntensity={3.2} />
+            <mesh position={[-0.05, -0.15, 0]}>
+              <coneGeometry args={[0.016, 0.045, 8]} />
+              <meshBasicMaterial color="#FF9900" />
             </mesh>
-            <pointLight position={[-0.2, -0.15, 0]} color="#FFA500" intensity={0.6} distance={3} decay={2} />
+            <pointLight color="#FF9900" intensity={1.4} distance={2.4} decay={2} />
           </group>
         ))}
       </group>
 
-      {/* Courtyard-to-Street Gateway Portal at Z = 14 */}
-      <group position={[0, 0, 14]}>
-        {[-3.8, 3.8].map((px, pi) => (
-          <group key={`cgate-${pi}`} position={[px, 0, 0]}>
-            <mesh position={[0, 1.8, 0]} castShadow receiveShadow>
-              <boxGeometry args={[0.65, 3.6, 0.65]} />
-              <meshStandardMaterial color="#8F4B23" roughness={0.65} />
+      {/* Gateway Wall dividing Courtyard and Garden at Z: 12.0 */}
+      <group position={[0, 0, 12.0]}>
+        {/* Left Gate Wall */}
+        <mesh position={[-4.1, 1.6, 0]} castShadow receiveShadow>
+          <boxGeometry args={[3.8, 3.2, 0.4]} />
+          <meshStandardMaterial map={sandstoneTex} roughness={0.7} />
+        </mesh>
+        {/* Right Gate Wall */}
+        <mesh position={[4.1, 1.6, 0]} castShadow receiveShadow>
+          <boxGeometry args={[3.8, 3.2, 0.4]} />
+          <meshStandardMaterial map={sandstoneTex} roughness={0.7} />
+        </mesh>
+        {/* Gate Pillars flanking central arch (Opening is X: -2.2 to 2.2) */}
+        {[-2.2, 2.2].map((gx, gi) => (
+          <group key={`gpillar-${gi}`} position={[gx, 0, 0]}>
+            <mesh position={[0, 1.8, 0]} castShadow>
+              <boxGeometry args={[0.55, 3.6, 0.55]} />
+              <meshStandardMaterial color="#8F4B23" roughness={0.6} />
             </mesh>
+            {/* Kalash Top Finial */}
             <mesh position={[0, 3.8, 0]} castShadow>
-              <sphereGeometry args={[0.18, 12, 12]} />
-              <meshStandardMaterial color="#DAA520" metalness={0.8} roughness={0.25} />
+              <sphereGeometry args={[0.16, 12, 12]} />
+              <meshStandardMaterial color="#FFD700" metalness={0.9} roughness={0.2} />
             </mesh>
           </group>
         ))}
-        {/* Overhead Toran String */}
-        <group position={[0, 3.4, 0]}>
-          {[...Array(15)].map((_, i) => (
-            <mesh key={`cgtoran-${i}`} position={[(i - 7) * 0.45, Math.sin((i / 14) * Math.PI) * -0.2, 0]}>
-              <sphereGeometry args={[0.07, 8, 8]} />
-              <meshStandardMaterial
-                color={i % 2 === 0 ? '#FF9E00' : '#E85D04'}
-                emissive={i % 2 === 0 ? '#FFA200' : '#DC2F02'}
-                emissiveIntensity={0.6}
-              />
-            </mesh>
-          ))}
-        </group>
       </group>
 
       {/* ==============================================================
-          3. PHYSICAL 3D RANGOLI & POWDER STATIONS (CourtyardRangoli)
+          3. TULSI VRINDAVAN SHRINE (COURTYARD CORNER AT [-4.0, 0, 6.0])
+          ============================================================== */}
+      <group position={[-4.0, 0, 6.0]}>
+        {/* Stepped Makrana Base */}
+        <mesh position={[0, 0.12, 0]} receiveShadow>
+          <boxGeometry args={[1.4, 0.24, 1.4]} />
+          <meshStandardMaterial color="#FFF8EB" roughness={0.3} />
+        </mesh>
+        {/* Carved Terracotta Tulsi Kyari Pillar */}
+        <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
+          <boxGeometry args={[0.8, 0.7, 0.8]} />
+          <meshStandardMaterial color="#A35334" roughness={0.75} />
+        </mesh>
+        {/* Holy Basil Plant (Tulsi) */}
+        <PottedPlantModel position={[0, 0.9, 0]} scale={0.28} />
+
+        {/* Traditional Brass Pot / Lota (Poly Haven CC0 Model) */}
+        <BrassPotModel position={[0.55, 0.24, 0.4]} scale={0.35} />
+
+        {/* Dedicated Tulsi Terracotta Diya */}
+        <group position={[0, 0.92, 0.44]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.07, 0.045, 0.04, 10]} />
+            <meshStandardMaterial color="#A35334" roughness={0.75} />
+          </mesh>
+          {isTulsiLit && (
+            <>
+              <mesh position={[0, 0.03, 0]}>
+                <coneGeometry args={[0.018, 0.05, 8]} />
+                <meshBasicMaterial color="#FF9900" />
+              </mesh>
+              <pointLight color="#FF9900" intensity={2.2} distance={3.0} decay={2} />
+            </>
+          )}
+        </group>
+      </group>
+
+      {/* Traditional Clay Planters & Lanterns along Wall */}
+      <PlanterPotModel position={[4.2, 0, 2.8]} scale={0.65} />
+      <PlanterPotModel position={[4.2, 0, 9.2]} scale={0.65} />
+      <LanternModel position={[-2.2, 2.6, 12.2]} scale={0.4} />
+      <LanternModel position={[2.2, 2.6, 12.2]} scale={0.4} />
+
+      {/* ==============================================================
+          4. CENTRAL RANGOLI PEDESTAL
           ============================================================== */}
       <CourtyardRangoli />
-
-      {/* ==============================================================
-          4. SACRED TULSI VRINDAVAN (TULSI KYARI SHRINE) AT [-5, 0, 6]
-          ============================================================== */}
-      <group position={[-5, 0, 6]}>
-        {/* Stepped Terracotta Base Plinth */}
-        <mesh position={[0, 0.15, 0]} castShadow receiveShadow>
-          <boxGeometry args={[1.5, 0.3, 1.5]} />
-          <meshStandardMaterial color="#8B3A2B" roughness={0.65} />
-        </mesh>
-        {/* Ornate Octagonal Vrindavan Body */}
-        <mesh position={[0, 0.75, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.55, 0.65, 0.9, 8]} />
-          <meshStandardMaterial color="#A64B2A" roughness={0.6} />
-        </mesh>
-        {/* Carved Ledge & Crown Rim */}
-        <mesh position={[0, 1.25, 0]} castShadow>
-          <boxGeometry args={[1.25, 0.12, 1.25]} />
-          <meshStandardMaterial color="#8B3A2B" roughness={0.6} />
-        </mesh>
-        {/* Kalash Spire Motifs on 4 Corners */}
-        {[-0.5, 0.5].map((cx, ci) =>
-          [-0.5, 0.5].map((cz, cj) => (
-            <mesh key={`tkalash-${ci}-${cj}`} position={[cx, 1.35, cz]} castShadow>
-              <coneGeometry args={[0.06, 0.14, 8]} />
-              <meshStandardMaterial color="#DAA520" metalness={0.7} roughness={0.3} />
-            </mesh>
-          ))
-        )}
-
-        {/* Sacred Holy Basil (Tulsi) Plant on Top with Delicate Branches */}
-        <group position={[0, 1.45, 0]}>
-          <mesh castShadow>
-            <cylinderGeometry args={[0.04, 0.05, 0.3, 8]} />
-            <meshStandardMaterial color="#3D1D09" roughness={0.8} />
-          </mesh>
-          <mesh position={[0, 0.28, 0]} castShadow>
-            <sphereGeometry args={[0.42, 12, 12]} />
-            <meshStandardMaterial color="#1B4D28" roughness={0.65} />
-          </mesh>
-          <mesh position={[0.1, 0.42, 0.08]} castShadow>
-            <sphereGeometry args={[0.26, 10, 10]} />
-            <meshStandardMaterial color="#245F33" roughness={0.65} />
-          </mesh>
-        </group>
-
-        {/* Shrine Arched Niche with Sacred Diya */}
-        <group position={[0, 0.75, 0.52]}>
-          {/* Niche Frame */}
-          <mesh castShadow>
-            <boxGeometry args={[0.34, 0.45, 0.12]} />
-            <meshStandardMaterial color="#5C1D13" roughness={0.7} />
-          </mesh>
-          {/* Brass Diya Vessel */}
-          <mesh position={[0, -0.12, 0.04]} castShadow>
-            <cylinderGeometry args={[0.09, 0.06, 0.05, 12]} />
-            <meshStandardMaterial color="#DAA520" metalness={0.85} roughness={0.25} />
-          </mesh>
-          {/* Diya Flame when Lit */}
-          {isTulsiLit && (
-            <group position={[0, -0.06, 0.04]}>
-              <mesh>
-                <sphereGeometry args={[0.04, 8, 8]} />
-                <meshStandardMaterial
-                  color="#FF5722"
-                  emissive="#FFA500"
-                  emissiveIntensity={3.8}
-                />
-              </mesh>
-              <pointLight color="#FFA500" intensity={1.5} distance={5} decay={2} />
-            </group>
-          )}
-        </group>
-      </group>
-
-      {/* ==============================================================
-          5. TRADITIONAL INDIAN WOVEN CHARPAI COT & CARVED PILLAR
-          ============================================================== */}
-      {/* Handcrafted Indian Charpai Cot at [ 5.8, 0, 4 ] */}
-      <group position={[5.8, 0, 4]} rotation={[0, -0.22, 0]}>
-        {/* Carved Sheesham Frame */}
-        <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
-          <boxGeometry args={[2.4, 0.09, 1.3]} />
-          <meshStandardMaterial color="#361705" roughness={0.45} />
-        </mesh>
-        {/* Woven Jute Rope Surface with Traditional Cross-Twill Weave */}
-        <mesh position={[0, 0.47, 0]} receiveShadow>
-          <boxGeometry args={[2.15, 0.04, 1.05]} />
-          <meshStandardMaterial color="#DDB892" roughness={0.9} />
-        </mesh>
-        {/* 4 Turned Wooden Legs */}
-        {[
-          [-1.05, -0.5],
-          [1.05, -0.5],
-          [-1.05, 0.5],
-          [1.05, 0.5],
-        ].map(([lx, lz], i) => (
-          <mesh key={`charpaileg-${i}`} position={[lx, 0.22, lz]} castShadow>
-            <cylinderGeometry args={[0.05, 0.04, 0.44, 10]} />
-            <meshStandardMaterial color="#DAA520" metalness={0.6} roughness={0.4} />
-          </mesh>
-        ))}
-        {/* Embroidered Rajasthani Bolster Cushion on Charpai */}
-        <mesh position={[0, 0.62, -0.32]} rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[0.16, 0.16, 1.2, 16]} />
-          <meshStandardMaterial color="#E76F51" roughness={0.5} />
-        </mesh>
-      </group>
-
-      {/* Carved Stone Pillar with Brass Lantern at [ 5, 0, 6 ] */}
-      <group position={[5, 0, 6]}>
-        {/* Stepped Pedestal Base */}
-        <mesh position={[0, 0.35, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.7, 0.7, 0.7]} />
-          <meshStandardMaterial color="#8F4B23" roughness={0.65} />
-        </mesh>
-        {/* Fluted Stone Shaft */}
-        <mesh position={[0, 1.6, 0]} castShadow>
-          <cylinderGeometry args={[0.22, 0.28, 2.0, 16]} />
-          <meshStandardMaterial color="#C68B59" roughness={0.6} />
-        </mesh>
-        {/* Ornate Rajput Capital */}
-        <mesh position={[0, 2.7, 0]} castShadow>
-          <boxGeometry args={[0.65, 0.25, 0.65]} />
-          <meshStandardMaterial color="#8F4B23" roughness={0.6} />
-        </mesh>
-        {/* Brass Hexagonal Lantern Housing */}
-        <group position={[0, 3.1, 0]}>
-          <mesh castShadow>
-            <cylinderGeometry args={[0.26, 0.2, 0.55, 6]} />
-            <meshStandardMaterial color="#DAA520" metalness={0.88} roughness={0.25} />
-          </mesh>
-          {/* Flame inside Lantern */}
-          {isPillarLit && (
-            <group position={[0, 0, 0]}>
-              <mesh>
-                <sphereGeometry args={[0.07, 8, 8]} />
-                <meshStandardMaterial
-                  color="#FF5722"
-                  emissive="#FFA500"
-                  emissiveIntensity={3.6}
-                />
-              </mesh>
-              <pointLight color="#FFA500" intensity={1.8} distance={6} decay={2} />
-            </group>
-          )}
-        </group>
-      </group>
     </group>
   );
 };

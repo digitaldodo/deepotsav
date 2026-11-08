@@ -1,22 +1,23 @@
 import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { useGameState } from '../state/useGameState';
+import { CinematicCameraRig } from '../controls/CinematicCameraRig';
 import { FirstPersonController } from '../controls/FirstPersonController';
 import { FirstPersonHands } from '../controls/FirstPersonHands';
+import { DistantScenery } from './DistantScenery';
 import { HomeExterior } from './HomeExterior';
 import { HouseInterior } from './HouseInterior';
 import { DiningAndSweets } from './DiningAndSweets';
 import { PujaCorner } from './PujaCorner';
 import { Courtyard } from './Courtyard';
-import { NeighbourhoodPark } from './NeighbourhoodPark';
-import { SparklerStation } from './SparklerStation';
-import { FireworksStall } from './FireworksStall';
-import { FireworksDisplay } from './FireworksDisplay';
-import { Decorations } from './Decorations';
+import { FireworksZone } from './FireworksZone';
 
 export const DiwaliWorld: React.FC = () => {
+  const { cinematicActive } = useGameState();
+
   return (
     <div
-      className="absolute inset-0 w-full h-full bg-[#0A0A1A] overflow-hidden select-none"
+      className="absolute inset-0 w-full h-full bg-[#0A0F26] overflow-hidden select-none touch-none"
       style={{
         width: '100%',
         height: '100%',
@@ -26,12 +27,12 @@ export const DiwaliWorld: React.FC = () => {
       }}
     >
       <Canvas
-        camera={{ fov: 70, near: 0.1, far: 140, position: [0, 1.6, 9] }}
-        dpr={[1, typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 1.5) : 1]}
+        camera={{ fov: 75, near: 0.1, far: 180, position: [0, 1.65, 8.5] }}
+        dpr={[1, typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 1.75) : 1]}
         gl={{
           antialias: true,
           alpha: false,
-          powerPreference: 'default',
+          powerPreference: 'high-performance',
           failIfMajorPerformanceCaveat: false,
         }}
         onCreated={({ gl }) => {
@@ -46,18 +47,22 @@ export const DiwaliWorld: React.FC = () => {
         style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
       >
         <Suspense fallback={null}>
-          <FirstPersonController />
+          {/* Camera Controller: Cinematic Mode vs Gameplay First Person */}
+          {cinematicActive ? <CinematicCameraRig /> : <FirstPersonController />}
+
+          {/* First Person Hands (Active only in Gameplay) */}
           <FirstPersonHands />
+
+          {/* Expansive Distant Scenery (Sky, Moon, Stars, Distant Havelis, Temple, Distant Fireworks) */}
+          <DistantScenery />
+
+          {/* Playable Compact World Modules */}
           <HomeExterior />
           <HouseInterior />
           <DiningAndSweets />
           <PujaCorner />
           <Courtyard />
-          <NeighbourhoodPark />
-          <SparklerStation />
-          <FireworksStall />
-          <FireworksDisplay />
-          <Decorations />
+          <FireworksZone />
         </Suspense>
       </Canvas>
     </div>
