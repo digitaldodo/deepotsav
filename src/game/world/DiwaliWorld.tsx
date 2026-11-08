@@ -9,6 +9,7 @@ import { PujaCorner } from './PujaCorner';
 import { Courtyard } from './Courtyard';
 import { NeighbourhoodPark } from './NeighbourhoodPark';
 import { SparklerStation } from './SparklerStation';
+import { FireworksStall } from './FireworksStall';
 import { FireworksDisplay } from './FireworksDisplay';
 import { Decorations } from './Decorations';
 
@@ -54,6 +55,7 @@ export const DiwaliWorld: React.FC = () => {
           <Courtyard />
           <NeighbourhoodPark />
           <SparklerStation />
+          <FireworksStall />
           <FireworksDisplay />
           <Decorations />
         </Suspense>

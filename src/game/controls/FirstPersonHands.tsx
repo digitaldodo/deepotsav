@@ -10,6 +10,7 @@ export const FirstPersonHands: React.FC = () => {
     handAnim,
     heldSweetType,
     heldPowderColor,
+    heldFireworkType,
     sparklerIgnited,
   } = useGameState();
 
@@ -256,6 +257,50 @@ export const FirstPersonHands: React.FC = () => {
               </mesh>
               <pointLight color="#FFA500" intensity={1.8} distance={2.5} decay={2} />
             </group>
+          </group>
+        )}
+
+        {/* ==============================================================
+            HELD ITEM: INDIAN FIREWORK (CHAKRI / ANAR / ROCKET / LADI ETC.)
+            ============================================================== */}
+        {handItem === 'firework' && heldFireworkType && (
+          <group position={[0, 0.04, -0.06]}>
+            {heldFireworkType === 'chakri' && (
+              <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.06, 0.06, 0.02, 16]} />
+                <meshStandardMaterial color="#FF5722" roughness={0.5} />
+              </mesh>
+            )}
+            {heldFireworkType === 'anar' && (
+              <mesh castShadow>
+                <coneGeometry args={[0.045, 0.09, 12]} />
+                <meshStandardMaterial color="#D4AF37" metalness={0.8} />
+              </mesh>
+            )}
+            {heldFireworkType === 'rocket' && (
+              <group>
+                <mesh castShadow>
+                  <cylinderGeometry args={[0.006, 0.006, 0.18, 8]} />
+                  <meshStandardMaterial color="#ECECEC" />
+                </mesh>
+                <mesh position={[0, 0.07, 0]}>
+                  <coneGeometry args={[0.02, 0.05, 8]} />
+                  <meshStandardMaterial color="#E53935" />
+                </mesh>
+              </group>
+            )}
+            {heldFireworkType === 'ladi' && (
+              <mesh castShadow>
+                <boxGeometry args={[0.14, 0.02, 0.06]} />
+                <meshStandardMaterial color="#D32F2F" />
+              </mesh>
+            )}
+            {(heldFireworkType === 'pencil' || heldFireworkType === 'sita_geeta' || heldFireworkType === 'ganga_jamuna') && (
+              <mesh castShadow>
+                <cylinderGeometry args={[0.018, 0.018, 0.14, 10]} />
+                <meshStandardMaterial color="#9C27B0" />
+              </mesh>
+            )}
           </group>
         )}
 

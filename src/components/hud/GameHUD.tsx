@@ -21,6 +21,8 @@ export const GameHUD: React.FC = () => {
     heldPowderName,
     heldPowderColor,
     heldSweetType,
+    heldFireworkType,
+    rangoliDesign,
     clearHand,
   } = useGameState();
 
@@ -74,6 +76,7 @@ export const GameHUD: React.FC = () => {
                   {handItem === 'sweet' && (heldSweetType || 'Sweet')}
                   {handItem === 'diya_stick' && 'Lighting Stick'}
                   {handItem === 'sparkler' && 'Phuljhadi Sparkler'}
+                  {handItem === 'firework' && `${heldFireworkType?.toUpperCase()} Firework`}
                 </span>
                 <button
                   onClick={clearHand}
