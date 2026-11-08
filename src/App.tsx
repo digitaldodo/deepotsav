@@ -5,9 +5,10 @@ import { GameHUD } from './components/hud/GameHUD';
 import { MobileVirtualControls } from './game/controls/MobileVirtualControls';
 import { CinematicOverlay } from './components/menus/CinematicOverlay';
 import { PauseMenu } from './components/menus/PauseMenu';
+import { Game3DErrorBoundary, UIErrorBoundary } from './components/common/ErrorBoundary';
 
 export const App: React.FC = () => {
-  const { cinematicActive } = useGameState();
+  const cinematicActive = useGameState(s => s.cinematicActive);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
@@ -29,20 +30,25 @@ export const App: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* 3D Diwali World Canvas */}
-      <DiwaliWorld />
+      {/* 3D Diwali World Canvas with independent error boundary */}
+      <Game3DErrorBoundary>
+        <DiwaliWorld />
+      </Game3DErrorBoundary>
 
-      {/* Cinematic Happy Diwali Intro Overlay */}
-      {cinematicActive && <CinematicOverlay />}
+      {/* UI Overlays with independent error boundary */}
+      <UIErrorBoundary>
+        {/* Cinematic Happy Diwali Intro Overlay */}
+        {cinematicActive && <CinematicOverlay />}
 
-      {/* Active First-Person Gameplay Overlays */}
-      {!cinematicActive && (
-        <>
-          <GameHUD />
-          {isTouchDevice && <MobileVirtualControls />}
-          <PauseMenu />
-        </>
-      )}
+        {/* Active First-Person Gameplay Overlays */}
+        {!cinematicActive && (
+          <>
+            <GameHUD />
+            {isTouchDevice && <MobileVirtualControls />}
+            <PauseMenu />
+          </>
+        )}
+      </UIErrorBoundary>
     </div>
   );
 };

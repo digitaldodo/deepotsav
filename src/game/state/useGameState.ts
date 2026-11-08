@@ -352,7 +352,15 @@ export const useGameState = create<GameState>((set, get) => ({
   setGraphicsQuality: quality => set({ graphicsQuality: quality }),
   setSoundEnabled: enabled => set({ soundEnabled: enabled }),
   setSoundVolume: volume => set({ soundVolume: volume }),
-  setPlayerPosition: pos => set({ playerPosition: pos }),
+  setPlayerPosition: pos => {
+    const curr = get().playerPosition;
+    const dx = curr[0] - pos[0];
+    const dy = curr[1] - pos[1];
+    const dz = curr[2] - pos[2];
+    if (dx * dx + dy * dy + dz * dz > 0.08) {
+      set({ playerPosition: pos });
+    }
+  },
   setCurrentLocationName: name => set({ currentLocationName: name }),
   setActivePrompt: prompt => set({ activePrompt: prompt }),
 
@@ -680,36 +688,35 @@ export const useGameState = create<GameState>((set, get) => ({
   },
 
   updatePlacedFireworks: (delta: number) => {
-    set(state => ({
-      placedFireworks: state.placedFireworks
-        .map((f): PlacedFirework => {
-          if (f.state === 'fuse_burning') {
-            const nextTimer = f.timer + delta;
-            if (nextTimer >= (f.fuseBurnDuration || 1.1)) {
-              return {
-                ...f,
-                state: 'active',
-                timer: 0,
-              };
-            }
-            return {
-              ...f,
-              timer: nextTimer,
-            };
-          }
-          if (f.state === 'active') {
-            const nextTimer = f.timer + delta;
-            const nextState: 'active' | 'burnt' = nextTimer >= f.duration ? 'burnt' : 'active';
-            return {
-              ...f,
-              timer: nextTimer,
-              state: nextState,
-            };
-          }
-          return f;
-        })
-        .filter(f => f.state !== 'burnt' || f.timer < f.duration + 5),
-    }));
+    const state = get();
+    if (!state.placedFireworks || state.placedFireworks.length === 0) return;
+
+    let stateChanged = false;
+    const updated = state.placedFireworks.map(f => {
+      if (f.state === 'fuse_burning') {
+        const nextTimer = (f.timer || 0) + delta;
+        if (nextTimer >= (f.fuseBurnDuration || 1.1)) {
+          stateChanged = true;
+          return { ...f, state: 'active' as const, timer: 0 };
+        }
+        f.timer = nextTimer;
+        return f;
+      }
+      if (f.state === 'active') {
+        const nextTimer = (f.timer || 0) + delta;
+        if (nextTimer >= f.duration) {
+          stateChanged = true;
+          return { ...f, state: 'burnt' as const, timer: nextTimer };
+        }
+        f.timer = nextTimer;
+        return f;
+      }
+      return f;
+    });
+
+    if (stateChanged) {
+      set({ placedFireworks: [...updated] });
+    }
   },
 
   triggerFirework: () => {
@@ -749,16 +756,13 @@ export const useGameState = create<GameState>((set, get) => ({
     handAnim: 'idle',
   }),
 
-  addSparklerTrailPoint: pt => set(state => ({
-    sparklerTrails: [...state.sparklerTrails.slice(-120), { ...pt, life: 1 }],
-  })),
+  addSparklerTrailPoint: (_pt) => {
+    // Decoupled from Zustand - 3D particle ribbon trails run directly inside Three.js
+  },
 
-  updateSparklerTrails: delta => set(state => ({
-    sparklerTrails: state.sparklerTrails
-      .map(pt => ({ ...pt, life: pt.life - delta * 0.9 }))
-      .filter(pt => pt.life > 0),
-    sparklerBurnTime: state.sparklerIgnited ? state.sparklerBurnTime + delta : state.sparklerBurnTime,
-  })),
+  updateSparklerTrails: (_delta) => {
+    // Decoupled from Zustand - 3D particle ribbon trails run directly inside Three.js
+  },
 
   resetGameProgress: () => set({
     sweetsRemaining: { ...DEFAULT_SWEETS },

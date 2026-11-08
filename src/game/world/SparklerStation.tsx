@@ -6,18 +6,13 @@ import { audioManager } from '../audio/AudioManager';
 
 export const SparklerStation: React.FC = () => {
   const { camera } = useThree();
-  const {
-    playerPosition,
-    setActivePrompt,
-    sparklerHolding,
-    sparklerIgnited,
-    pickupSparkler,
-    igniteSparkler,
-    dropSparkler,
-    addSparklerTrailPoint,
-    updateSparklerTrails,
-    sparklerTrails,
-  } = useGameState();
+  const playerPosition = useGameState(s => s.playerPosition);
+  const setActivePrompt = useGameState(s => s.setActivePrompt);
+  const sparklerHolding = useGameState(s => s.sparklerHolding);
+  const sparklerIgnited = useGameState(s => s.sparklerIgnited);
+  const pickupSparkler = useGameState(s => s.pickupSparkler);
+  const igniteSparkler = useGameState(s => s.igniteSparkler);
+  const dropSparkler = useGameState(s => s.dropSparkler);
 
   const sparkParticlesRef = useRef<THREE.Points>(null);
 
@@ -176,14 +171,6 @@ export const SparklerStation: React.FC = () => {
           <pointsMaterial size={0.03} color="#FFFFFF" transparent opacity={0.95} />
         </points>
       )}
-
-      {/* 3D Glowing Spark Trails drawn in the air */}
-      {sparklerTrails.map((pt, idx) => (
-        <mesh key={idx} position={[pt.x, pt.y, pt.z]}>
-          <sphereGeometry args={[0.025 * pt.life, 6, 6]} />
-          <meshBasicMaterial color="#FFD700" transparent opacity={pt.life} />
-        </mesh>
-      ))}
     </group>
   );
 };

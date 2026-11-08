@@ -2,26 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { useGameState } from '../../game/state/useGameState';
 import { audioManager } from '../../game/audio/AudioManager';
 import { ActivityJournal } from './ActivityJournal';
+import { RangoliToolbar } from './RangoliToolbar';
 
 export const GameHUD: React.FC = () => {
-  const {
-    currentLocationName,
-    activePrompt,
-    setPaused,
-    soundEnabled,
-    setSoundEnabled,
-    handItem,
-    heldPowderName,
-    heldPowderColor,
-    heldSweetType,
-    heldFireworkType,
-    clearHand,
-    placementMode,
-    placementPos,
-    placementValid,
-    placeFireworkOnGround,
-    cancelPlacement,
-  } = useGameState();
+  const currentLocationName = useGameState(s => s.currentLocationName);
+  const activePrompt = useGameState(s => s.activePrompt);
+  const setPaused = useGameState(s => s.setPaused);
+  const soundEnabled = useGameState(s => s.soundEnabled);
+  const setSoundEnabled = useGameState(s => s.setSoundEnabled);
+  const handItem = useGameState(s => s.handItem);
+  const heldPowderName = useGameState(s => s.heldPowderName);
+  const heldPowderColor = useGameState(s => s.heldPowderColor);
+  const heldSweetType = useGameState(s => s.heldSweetType);
+  const heldFireworkType = useGameState(s => s.heldFireworkType);
+  const clearHand = useGameState(s => s.clearHand);
+  const placementMode = useGameState(s => s.placementMode);
+  const placementPos = useGameState(s => s.placementPos);
+  const placementValid = useGameState(s => s.placementValid);
+  const placeFireworkOnGround = useGameState(s => s.placeFireworkOnGround);
+  const cancelPlacement = useGameState(s => s.cancelPlacement);
 
   const [journalOpen, setJournalOpen] = useState(false);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
@@ -270,6 +269,9 @@ export const GameHUD: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* 3D Rangoli Creative Studio Toolbar */}
+      <RangoliToolbar />
 
       {/* Activity Journal Modal / Bottom Sheet */}
       <ActivityJournal isOpen={journalOpen} onClose={() => setJournalOpen(false)} />

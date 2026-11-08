@@ -7,6 +7,7 @@ export const touchInput = {
   lookDeltaX: 0,
   lookDeltaY: 0,
   isMoving: false,
+  suspended: false,
 };
 
 export const MobileVirtualControls: React.FC = () => {

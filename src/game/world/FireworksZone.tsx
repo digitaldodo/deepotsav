@@ -91,24 +91,22 @@ export const STALL_FIREWORKS: StallFireworkItem[] = [
 ];
 
 export const FireworksZone: React.FC = () => {
-  const {
-    pickupFirework,
-    pickupSparkler,
-    igniteSparkler,
-    dropSparkler,
-    sparklerHolding,
-    sparklerIgnited,
-    placedFireworks,
-    updatePlacedFireworks,
-    startFuseBurn,
-    triggerGrandFinale,
-    grandFinaleActive,
-    heldFireworkType,
-    handItem,
-    placementMode,
-    placementPos,
-    placementValid,
-  } = useGameState();
+  const pickupFirework = useGameState(s => s.pickupFirework);
+  const pickupSparkler = useGameState(s => s.pickupSparkler);
+  const igniteSparkler = useGameState(s => s.igniteSparkler);
+  const dropSparkler = useGameState(s => s.dropSparkler);
+  const sparklerHolding = useGameState(s => s.sparklerHolding);
+  const sparklerIgnited = useGameState(s => s.sparklerIgnited);
+  const placedFireworks = useGameState(s => s.placedFireworks);
+  const updatePlacedFireworks = useGameState(s => s.updatePlacedFireworks);
+  const startFuseBurn = useGameState(s => s.startFuseBurn);
+  const triggerGrandFinale = useGameState(s => s.triggerGrandFinale);
+  const grandFinaleActive = useGameState(s => s.grandFinaleActive);
+  const heldFireworkType = useGameState(s => s.heldFireworkType);
+  const handItem = useGameState(s => s.handItem);
+  const placementMode = useGameState(s => s.placementMode);
+  const placementPos = useGameState(s => s.placementPos);
+  const placementValid = useGameState(s => s.placementValid);
 
   const sandstoneTex = useMemo(() => getSandstoneTexture('#C68B59'), []);
   const stallBannerTex = useMemo(() => getStallBannerTexture(), []);

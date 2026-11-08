@@ -1,12 +1,13 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useGameState } from '../state/useGameState';
+import { useGameState, HandAnimationState, HandItemType } from '../state/useGameState';
 import {
   getMotichoorTexture,
   getSilverVarkTexture,
 } from '../utils/textureGenerator';
 import { FirecrackerModel } from '../world/FirecrackerModels';
+import { ArticulatedHandMesh, HandPoseAngles } from './ArticulatedHandModel';
 
 // Active spark/flame source tracker for physical fuse contact ignition
 export const activeSparkSource = {
@@ -15,40 +16,145 @@ export const activeSparkSource = {
   type: 'sparkler' as 'sparkler' | 'diya_stick',
 };
 
+// Target poses calculation based on activity and held object
+function calculateTargetPose(anim: HandAnimationState, item: HandItemType, time: number): HandPoseAngles {
+  if (item === 'sweet') {
+    if (anim === 'eating') {
+      return {
+        thumb: { mcp: 0.5, pip: 0.55, dip: 0.4, spread: 0.3 },
+        index: { mcp: 0.65, pip: 0.85, dip: 0.55, spread: 0.06 },
+        middle: { mcp: 0.7, pip: 0.9, dip: 0.6, spread: 0.02 },
+        ring: { mcp: 0.8, pip: 1.0, dip: 0.75, spread: 0.04 },
+        pinky: { mcp: 0.9, pip: 1.1, dip: 0.85, spread: 0.08 },
+      };
+    }
+    // Delicate fingertip pinch
+    return {
+      thumb: { mcp: 0.42, pip: 0.48, dip: 0.32, spread: 0.35 },
+      index: { mcp: 0.52, pip: 0.72, dip: 0.48, spread: 0.08 },
+      middle: { mcp: 0.58, pip: 0.78, dip: 0.52, spread: 0.02 },
+      ring: { mcp: 0.72, pip: 0.92, dip: 0.68, spread: 0.04 },
+      pinky: { mcp: 0.82, pip: 1.02, dip: 0.78, spread: 0.09 },
+    };
+  }
+
+  if (item === 'powder') {
+    // Right hand pinching powder between fingertips
+    const sprinkleVibe = anim === 'sprinkling' ? Math.sin(time * 26) * 0.12 : 0;
+    return {
+      thumb: { mcp: 0.45 + sprinkleVibe, pip: 0.5, dip: 0.35, spread: 0.32 },
+      index: { mcp: 0.55 + sprinkleVibe, pip: 0.75, dip: 0.5, spread: 0.06 },
+      middle: { mcp: 0.6, pip: 0.8, dip: 0.55, spread: 0.02 },
+      ring: { mcp: 0.7, pip: 0.9, dip: 0.65, spread: 0.04 },
+      pinky: { mcp: 0.8, pip: 1.0, dip: 0.75, spread: 0.08 },
+    };
+  }
+
+  if (item === 'sparkler') {
+    // Power grip wrapping around wire handle
+    return {
+      thumb: { mcp: 0.65, pip: 0.75, dip: 0.55, spread: 0.15 },
+      index: { mcp: 0.85, pip: 1.15, dip: 0.85, spread: -0.02 },
+      middle: { mcp: 0.9, pip: 1.2, dip: 0.9, spread: 0.01 },
+      ring: { mcp: 0.92, pip: 1.22, dip: 0.92, spread: 0.03 },
+      pinky: { mcp: 0.95, pip: 1.25, dip: 0.95, spread: 0.06 },
+    };
+  }
+
+  if (item === 'diya_stick') {
+    // Holding brass stick
+    return {
+      thumb: { mcp: 0.55, pip: 0.65, dip: 0.45, spread: 0.2 },
+      index: { mcp: 0.75, pip: 0.95, dip: 0.65, spread: 0.02 },
+      middle: { mcp: 0.8, pip: 1.05, dip: 0.75, spread: 0.01 },
+      ring: { mcp: 0.82, pip: 1.08, dip: 0.78, spread: 0.03 },
+      pinky: { mcp: 0.85, pip: 1.1, dip: 0.8, spread: 0.06 },
+    };
+  }
+
+  if (item === 'firework') {
+    // Cupped supportive grip
+    return {
+      thumb: { mcp: 0.35, pip: 0.45, dip: 0.3, spread: 0.25 },
+      index: { mcp: 0.5, pip: 0.65, dip: 0.45, spread: -0.02 },
+      middle: { mcp: 0.55, pip: 0.7, dip: 0.5, spread: 0.01 },
+      ring: { mcp: 0.6, pip: 0.75, dip: 0.55, spread: 0.03 },
+      pinky: { mcp: 0.65, pip: 0.8, dip: 0.6, spread: 0.06 },
+    };
+  }
+
+  if (anim === 'ringing_bell') {
+    return {
+      thumb: { mcp: 0.6, pip: 0.7, dip: 0.5, spread: 0.18 },
+      index: { mcp: 0.8, pip: 1.1, dip: 0.8, spread: 0.0 },
+      middle: { mcp: 0.85, pip: 1.15, dip: 0.85, spread: 0.01 },
+      ring: { mcp: 0.88, pip: 1.18, dip: 0.88, spread: 0.03 },
+      pinky: { mcp: 0.9, pip: 1.2, dip: 0.9, spread: 0.06 },
+    };
+  }
+
+  if (anim === 'reach') {
+    return {
+      thumb: { mcp: 0.05, pip: 0.05, dip: 0.05, spread: 0.25 },
+      index: { mcp: 0.08, pip: 0.08, dip: 0.05, spread: -0.1 },
+      middle: { mcp: 0.05, pip: 0.05, dip: 0.05, spread: 0 },
+      ring: { mcp: 0.08, pip: 0.08, dip: 0.05, spread: 0.08 },
+      pinky: { mcp: 0.12, pip: 0.12, dip: 0.08, spread: 0.15 },
+    };
+  }
+
+  // Idle relaxed hand
+  return {
+    thumb: { mcp: 0.18, pip: 0.22, dip: 0.16, spread: 0.12 },
+    index: { mcp: 0.28, pip: 0.38, dip: 0.24, spread: -0.04 },
+    middle: { mcp: 0.32, pip: 0.42, dip: 0.26, spread: 0.0 },
+    ring: { mcp: 0.36, pip: 0.46, dip: 0.28, spread: 0.04 },
+    pinky: { mcp: 0.42, pip: 0.52, dip: 0.32, spread: 0.08 },
+  };
+}
+
+// Left hand cupped pose holding the brass powder bowl
+const leftHandCupPose: HandPoseAngles = {
+  thumb: { mcp: 0.18, pip: 0.22, dip: 0.14, spread: 0.26 },
+  index: { mcp: 0.32, pip: 0.42, dip: 0.22, spread: -0.04 },
+  middle: { mcp: 0.28, pip: 0.38, dip: 0.2, spread: 0.0 },
+  ring: { mcp: 0.32, pip: 0.42, dip: 0.22, spread: 0.04 },
+  pinky: { mcp: 0.38, pip: 0.48, dip: 0.26, spread: 0.08 },
+};
+
 export const FirstPersonHands: React.FC = () => {
   const { camera } = useThree();
-  const {
-    cinematicActive,
-    handItem,
-    handAnim,
-    heldSweetType,
-    heldPowderColor,
-    heldFireworkType,
-    sparklerIgnited,
-    sparklerTrails,
-    addSparklerTrailPoint,
-    updateSparklerTrails,
-  } = useGameState();
+  const cinematicActive = useGameState(s => s.cinematicActive);
+  const handItem = useGameState(s => s.handItem);
+  const handAnim = useGameState(s => s.handAnim);
+  const heldSweetType = useGameState(s => s.heldSweetType);
+  const heldPowderColor = useGameState(s => s.heldPowderColor);
+  const heldFireworkType = useGameState(s => s.heldFireworkType);
+  const sparklerIgnited = useGameState(s => s.sparklerIgnited);
+  const dropSparkler = useGameState(s => s.dropSparkler);
 
   const containerRef = useRef<THREE.Group>(null);
   const handRootRef = useRef<THREE.Group>(null);
 
-  // Finger joint refs for procedural posing
-  const thumbRef = useRef<THREE.Group>(null);
-  const indexRef = useRef<THREE.Group>(null);
-  const middleRef = useRef<THREE.Group>(null);
-  const ringRef = useRef<THREE.Group>(null);
-  const pinkyRef = useRef<THREE.Group>(null);
-
-  // Spark shower particles
+  // Spark shower particles & 3D ribbon trail
   const sparkParticlesRef = useRef<THREE.Points>(null);
   const powderParticlesRef = useRef<THREE.Points>(null);
+  const trailLineRef = useRef<THREE.Line>(null);
+  const maxTrailPoints = 60;
+  const trailPositions = useMemo(() => new Float32Array(maxTrailPoints * 3), []);
+  const trailCount = useRef(0);
+  const burnTimerRef = useRef(0);
 
   // Lerp transform targets
   const targetPos = useRef(new THREE.Vector3(0.24, -0.22, -0.46));
   const targetRot = useRef(new THREE.Euler(-0.15, 0.2, -0.08));
   const currentPos = useRef(new THREE.Vector3(0.24, -0.45, -0.46));
   const currentRot = useRef(new THREE.Euler(-0.15, 0.2, -0.08));
+
+  // Current animated hand pose
+  const [currentPose, setCurrentPose] = useState<HandPoseAngles>(() =>
+    calculateTargetPose('idle', 'none', 0)
+  );
 
   // Textures
   const motichoorTex = useMemo(() => getMotichoorTexture(), []);
@@ -88,44 +194,32 @@ export const FirstPersonHands: React.FC = () => {
     const breatheY = Math.sin(time * 2.2) * 0.005;
     const breatheX = Math.cos(time * 1.6) * 0.003;
 
-    // Finger curl targets based on animation
-    let fingerCurl = 0.35; // slightly curved rest pose
-    let thumbCurl = 0.2;
-
+    // Transform positioning based on animation
     switch (handAnim) {
       case 'idle':
         if (handItem === 'none') {
           targetPos.current.set(0.32, -0.42, -0.42);
           targetRot.current.set(-0.35, 0.2, -0.1);
-          fingerCurl = 0.25;
         } else {
           targetPos.current.set(0.24, -0.24 + breatheY, -0.46 + breatheX);
           targetRot.current.set(-0.15, 0.15, -0.05);
-          fingerCurl = 0.75;
-          thumbCurl = 0.6;
         }
         break;
 
       case 'reach':
         targetPos.current.set(0.18, -0.16, -0.56);
         targetRot.current.set(0.1, -0.05, 0.0);
-        fingerCurl = 0.15; // fingers open
-        thumbCurl = 0.1;
         break;
 
       case 'holding':
         targetPos.current.set(0.22 + breatheX, -0.18 + breatheY, -0.44);
         targetRot.current.set(-0.12, 0.1, -0.05);
-        fingerCurl = 0.8;
-        thumbCurl = 0.65;
         break;
 
       case 'eating': {
         const eatWave = (Math.sin(time * 12) + 1) * 0.5;
         targetPos.current.set(0.06, -0.06 + eatWave * 0.02, -0.28);
         targetRot.current.set(0.4, -0.15, 0.2);
-        fingerCurl = 0.9;
-        thumbCurl = 0.8;
         break;
       }
 
@@ -133,23 +227,18 @@ export const FirstPersonHands: React.FC = () => {
         const sprinkleShake = Math.sin(time * 26) * 0.02;
         targetPos.current.set(0.18 + sprinkleShake, -0.22, -0.46);
         targetRot.current.set(0.35, 0.0, 0.2 + Math.cos(time * 26) * 0.06);
-        fingerCurl = 0.85; // pinch
-        thumbCurl = 0.9;
         break;
       }
 
       case 'lighting':
         targetPos.current.set(0.14, -0.14, -0.6);
         targetRot.current.set(0.08, 0.05, 0.0);
-        fingerCurl = 0.75;
-        thumbCurl = 0.65;
         break;
 
       case 'ringing_bell': {
         const strike = Math.sin(time * 14) * 0.06;
         targetPos.current.set(0.12, -0.06, -0.56 + strike);
         targetRot.current.set(0.2, 0.0, 0.08);
-        fingerCurl = 0.3;
         break;
       }
     }
@@ -163,16 +252,18 @@ export const FirstPersonHands: React.FC = () => {
     currentRot.current.z = THREE.MathUtils.lerp(currentRot.current.z, targetRot.current.z, delta * 12);
     handRootRef.current.rotation.copy(currentRot.current);
 
-    // Procedural finger curling
-    if (thumbRef.current) thumbRef.current.rotation.z = thumbCurl;
-    if (indexRef.current) indexRef.current.rotation.x = fingerCurl;
-    if (middleRef.current) middleRef.current.rotation.x = fingerCurl * 1.05;
-    if (ringRef.current) ringRef.current.rotation.x = fingerCurl * 1.02;
-    if (pinkyRef.current) pinkyRef.current.rotation.x = fingerCurl * 0.95;
+    // Compute target anatomical finger pose
+    const nextPose = calculateTargetPose(handAnim, handItem, time);
+    setCurrentPose(nextPose);
 
     // Sparkler spark shower update
     if (handItem === 'sparkler' && sparklerIgnited) {
-      updateSparklerTrails(delta);
+      burnTimerRef.current += delta;
+      // Auto burnout after 25s
+      if (burnTimerRef.current > 25) {
+        dropSparkler();
+        burnTimerRef.current = 0;
+      }
 
       // Sparkler tip world position
       const tipOffset = new THREE.Vector3(0.22, -0.15, -0.68).applyQuaternion(camera.quaternion);
@@ -182,12 +273,24 @@ export const FirstPersonHands: React.FC = () => {
       activeSparkSource.position.copy(tipWorldPos);
       activeSparkSource.type = 'sparkler';
 
-      addSparklerTrailPoint({
-        x: tipWorldPos.x,
-        y: tipWorldPos.y,
-        z: tipWorldPos.z,
-        color: '#FFD700',
-      });
+      // Update 3D ribbon trail in GPU buffer (no React re-renders)
+      const n = Math.min(trailCount.current, maxTrailPoints - 1);
+      for (let i = n; i > 0; i--) {
+        trailPositions[i * 3] = trailPositions[(i - 1) * 3];
+        trailPositions[i * 3 + 1] = trailPositions[(i - 1) * 3 + 1];
+        trailPositions[i * 3 + 2] = trailPositions[(i - 1) * 3 + 2];
+      }
+      trailPositions[0] = tipWorldPos.x;
+      trailPositions[1] = tipWorldPos.y;
+      trailPositions[2] = tipWorldPos.z;
+      if (trailCount.current < maxTrailPoints) {
+        trailCount.current++;
+      }
+      if (trailLineRef.current) {
+        trailLineRef.current.geometry.attributes.position.needsUpdate = true;
+        trailLineRef.current.geometry.setDrawRange(0, Math.max(trailCount.current, 2));
+        trailLineRef.current.visible = true;
+      }
 
       if (sparkParticlesRef.current) {
         sparkParticlesRef.current.position.copy(tipWorldPos);
@@ -205,25 +308,32 @@ export const FirstPersonHands: React.FC = () => {
         }
         sparkParticlesRef.current.geometry.attributes.position.needsUpdate = true;
       }
-    } else if (handItem === 'diya_stick') {
-      const tipOffset = new THREE.Vector3(0.14, -0.14, -0.65).applyQuaternion(camera.quaternion);
-      const tipWorldPos = camera.position.clone().add(tipOffset);
-      activeSparkSource.active = true;
-      activeSparkSource.position.copy(tipWorldPos);
-      activeSparkSource.type = 'diya_stick';
     } else {
-      activeSparkSource.active = false;
+      burnTimerRef.current = 0;
+      if (trailLineRef.current) {
+        trailLineRef.current.visible = false;
+        trailCount.current = 0;
+      }
+      if (handItem === 'diya_stick') {
+        const tipOffset = new THREE.Vector3(0.14, -0.14, -0.65).applyQuaternion(camera.quaternion);
+        const tipWorldPos = camera.position.clone().add(tipOffset);
+        activeSparkSource.active = true;
+        activeSparkSource.position.copy(tipWorldPos);
+        activeSparkSource.type = 'diya_stick';
+      } else {
+        activeSparkSource.active = false;
+      }
     }
 
     // Powder sprinkle particle update
     if (handAnim === 'sprinkling' && powderParticlesRef.current) {
       const positions = powderParticlesRef.current.geometry.attributes.position.array as Float32Array;
       for (let i = 0; i < powderCount; i++) {
-        positions[i * 3 + 1] -= 0.65 * delta;
-        if (positions[i * 3 + 1] < -0.6) {
-          positions[i * 3] = (Math.random() - 0.5) * 0.05;
-          positions[i * 3 + 1] = -0.05;
-          positions[i * 3 + 2] = (Math.random() - 0.5) * 0.05;
+        positions[i * 3 + 1] -= delta * 0.45;
+        if (positions[i * 3 + 1] < -0.25) {
+          positions[i * 3] = (Math.random() - 0.5) * 0.04;
+          positions[i * 3 + 1] = 0;
+          positions[i * 3 + 2] = (Math.random() - 0.5) * 0.04;
         }
       }
       powderParticlesRef.current.geometry.attributes.position.needsUpdate = true;
@@ -235,95 +345,28 @@ export const FirstPersonHands: React.FC = () => {
   return (
     <>
       <group ref={containerRef}>
+        {/* ==============================================================
+            RIGHT ARTICULATED HUMAN HAND & HELD ITEMS
+            ============================================================== */}
         <group ref={handRootRef}>
-          {/* ==============================================================
-              1. ARTICULATED HUMAN FIRST-PERSON HAND & ARM
-              ============================================================== */}
-          {/* Festive Silk Kurta Sleeve (Deep Ruby Silk with Gold Embroidered Zari Trim) */}
-          <mesh position={[0.08, -0.26, 0.28]} rotation={[0.42, -0.15, 0.2]}>
-            <cylinderGeometry args={[0.058, 0.068, 0.32, 16]} />
-            <meshStandardMaterial color="#8B0000" roughness={0.65} />
-          </mesh>
-          {/* Zari Gold Brocade Sleeve Trim */}
-          <mesh position={[0.06, -0.16, 0.16]} rotation={[0.42, -0.15, 0.2]}>
-            <torusGeometry args={[0.06, 0.012, 10, 24]} />
-            <meshStandardMaterial color="#D4AF37" metalness={0.9} roughness={0.2} />
-          </mesh>
-
-          {/* Forearm (Realistic Indian Skin Tone) */}
-          <mesh position={[0.05, -0.12, 0.12]} rotation={[0.42, -0.15, 0.2]}>
-            <cylinderGeometry args={[0.042, 0.052, 0.24, 16]} />
-            <meshStandardMaterial color="#BD7B4D" roughness={0.65} />
-          </mesh>
-
-          {/* Traditional Auspicious 24K Gold Kada (Bangle) on Wrist */}
-          <mesh position={[0.038, -0.05, 0.06]} rotation={[0.42, -0.15, 0.2]}>
-            <torusGeometry args={[0.052, 0.012, 12, 28]} />
-            <meshStandardMaterial color="#FFD700" metalness={0.95} roughness={0.18} />
-          </mesh>
-
-          {/* Hand Palm */}
-          <mesh position={[0.02, 0, 0]} rotation={[0.08, 0, 0]}>
-            <boxGeometry args={[0.068, 0.03, 0.082]} />
-            <meshStandardMaterial color="#BD7B4D" roughness={0.65} />
-          </mesh>
-
-          {/* Thumb */}
-          <group ref={thumbRef} position={[-0.024, -0.005, -0.015]} rotation={[0.15, -0.4, 0.2]}>
-            <mesh position={[-0.015, 0, -0.02]}>
-              <cylinderGeometry args={[0.011, 0.013, 0.045, 10]} />
-              <meshStandardMaterial color="#BD7B4D" roughness={0.65} />
-            </mesh>
-          </group>
-
-          {/* 4 Articulated Fingers */}
-          {/* Index Finger */}
-          <group ref={indexRef} position={[0.028, 0.002, -0.045]}>
-            <mesh position={[0, -0.008, -0.025]} rotation={[0.2, 0, 0]}>
-              <cylinderGeometry args={[0.009, 0.011, 0.052, 10]} />
-              <meshStandardMaterial color="#BD7B4D" roughness={0.65} />
-            </mesh>
-          </group>
-
-          {/* Middle Finger */}
-          <group ref={middleRef} position={[0.01, 0.002, -0.048]}>
-            <mesh position={[0, -0.01, -0.028]} rotation={[0.2, 0, 0]}>
-              <cylinderGeometry args={[0.0095, 0.011, 0.058, 10]} />
-              <meshStandardMaterial color="#BD7B4D" roughness={0.65} />
-            </mesh>
-          </group>
-
-          {/* Ring Finger */}
-          <group ref={ringRef} position={[-0.008, 0.001, -0.045]}>
-            <mesh position={[0, -0.008, -0.025]} rotation={[0.2, 0, 0]}>
-              <cylinderGeometry args={[0.009, 0.01, 0.052, 10]} />
-              <meshStandardMaterial color="#BD7B4D" roughness={0.65} />
-            </mesh>
-          </group>
-
-          {/* Pinky Finger */}
-          <group ref={pinkyRef} position={[-0.024, 0, -0.04]}>
-            <mesh position={[0, -0.006, -0.02]} rotation={[0.2, 0, 0]}>
-              <cylinderGeometry args={[0.008, 0.009, 0.042, 10]} />
-              <meshStandardMaterial color="#BD7B4D" roughness={0.65} />
-            </mesh>
-          </group>
+          {/* Anatomical Human Hand with 5 Articulated Fingers */}
+          <ArticulatedHandMesh isLeft={false} pose={currentPose} />
 
           {/* ==============================================================
-              2. PHYSICAL HELD ITEMS (SWEET, POWDER BOWL, DIYA STICK, SPARKLER)
+              PHYSICAL HELD ITEMS (Relative to actual natural grip point)
               ============================================================== */}
-          {/* A. HELD SWEET */}
+          {/* A. HELD SWEET (Pinched between thumb and index fingertip) */}
           {handItem === 'sweet' && heldSweetType && (
-            <group position={[0.01, 0.025, -0.05]}>
+            <group position={[-0.012, 0.015, -0.065]}>
               {heldSweetType === 'laddoo' && (
                 <mesh castShadow>
-                  <sphereGeometry args={[0.028, 16, 16]} />
+                  <sphereGeometry args={[0.022, 16, 16]} />
                   <meshStandardMaterial map={motichoorTex} roughness={0.7} />
                 </mesh>
               )}
               {heldSweetType === 'kajuKatli' && (
                 <mesh castShadow rotation={[0.2, Math.PI / 4, 0]}>
-                  <boxGeometry args={[0.038, 0.012, 0.038]} />
+                  <boxGeometry args={[0.032, 0.01, 0.032]} />
                   <meshStandardMaterial
                     map={silverVarkTex}
                     metalness={0.75}
@@ -333,46 +376,37 @@ export const FirstPersonHands: React.FC = () => {
               )}
               {heldSweetType === 'gulabJamun' && (
                 <mesh castShadow>
-                  <sphereGeometry args={[0.026, 16, 16]} />
-                  <meshStandardMaterial
-                    color="#4A1C0A"
-                    roughness={0.25}
-                    metalness={0.1}
-                  />
+                  <sphereGeometry args={[0.022, 16, 14]} />
+                  <meshStandardMaterial color="#3E1C0A" roughness={0.4} />
                 </mesh>
               )}
               {heldSweetType === 'barfi' && (
                 <mesh castShadow>
-                  <boxGeometry args={[0.036, 0.016, 0.036]} />
-                  <meshStandardMaterial color="#66BB6A" roughness={0.5} />
+                  <boxGeometry args={[0.03, 0.016, 0.03]} />
+                  <meshStandardMaterial color="#FFF8DC" roughness={0.6} />
                 </mesh>
               )}
               {heldSweetType === 'modak' && (
-                <mesh castShadow rotation={[-Math.PI / 2, 0, 0]}>
-                  <coneGeometry args={[0.024, 0.042, 14]} />
-                  <meshStandardMaterial color="#FFF9E6" roughness={0.6} />
+                <mesh castShadow>
+                  <coneGeometry args={[0.022, 0.034, 16]} />
+                  <meshStandardMaterial color="#FFFFF0" roughness={0.5} />
                 </mesh>
               )}
             </group>
           )}
 
-          {/* B. HELD RANGOLI POWDER BOWL */}
+          {/* B. HELD RANGOLI POWDER (Right Hand Fine Powder Pinch) */}
           {handItem === 'powder' && (
-            <group position={[0.01, 0.02, -0.05]}>
-              {/* Brass Katori (Bowl) */}
-              <mesh castShadow>
-                <cylinderGeometry args={[0.034, 0.022, 0.026, 16]} />
-                <meshStandardMaterial color="#D4AF37" metalness={0.9} roughness={0.25} />
-              </mesh>
-              {/* Powder Heap */}
-              <mesh position={[0, 0.01, 0]}>
-                <sphereGeometry args={[0.028, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
+            <group position={[-0.012, 0.012, -0.062]}>
+              {/* Fine pinch of colored powder grains */}
+              <mesh position={[0, 0, 0]}>
+                <sphereGeometry args={[0.007, 8, 8]} />
                 <meshStandardMaterial
                   color={heldPowderColor || '#FFD54F'}
-                  roughness={0.9}
+                  roughness={0.95}
                 />
               </mesh>
-              {/* Powder Sprinkling Particle System */}
+              {/* Fine Falling Powder Sprinkling Stream */}
               {handAnim === 'sprinkling' && (
                 <points ref={powderParticlesRef} position={[0, -0.02, 0]}>
                   <bufferGeometry>
@@ -394,37 +428,37 @@ export const FirstPersonHands: React.FC = () => {
 
           {/* C. HELD BRASS DIYA LIGHTING STICK */}
           {handItem === 'diya_stick' && (
-            <group position={[0.01, 0.01, -0.06]} rotation={[0.4, 0, 0]}>
+            <group position={[-0.005, 0.01, -0.06]} rotation={[0.4, 0, 0]}>
               {/* Long Brass Wand */}
               <mesh castShadow position={[0, 0, -0.16]}>
                 <cylinderGeometry args={[0.004, 0.005, 0.34, 10]} />
-                <meshStandardMaterial color="#DAA520" metalness={0.88} roughness={0.25} />
+                <meshStandardMaterial color="#DAA520" metalness={0.9} roughness={0.25} />
               </mesh>
-              {/* Glowing Flame Tip */}
-              <mesh position={[0, 0, -0.34]}>
-                <coneGeometry args={[0.012, 0.028, 8]} />
-                <meshBasicMaterial color="#FFB300" />
-              </mesh>
-              <pointLight position={[0, 0, -0.34]} color="#FFA500" intensity={1.5} distance={1.8} decay={2} />
+              {/* Glowing Auspicious Diya Flame at Tip */}
+              <group position={[0, 0, -0.34]}>
+                <mesh>
+                  <sphereGeometry args={[0.014, 8, 8]} />
+                  <meshBasicMaterial color="#FFD700" />
+                </mesh>
+                <pointLight color="#FFA500" intensity={1.8} distance={3.0} decay={2} />
+              </group>
             </group>
           )}
 
           {/* D. HELD PHULJHADI (SPARKLER) */}
           {handItem === 'sparkler' && (
-            <group position={[0.01, 0.01, -0.06]} rotation={[0.3, 0, 0]}>
-              {/* Sparkler Wire Stem */}
-              <mesh position={[0, 0, -0.14]}>
-                <cylinderGeometry args={[0.003, 0.003, 0.32, 8]} />
-                <meshStandardMaterial color="#A9A9A9" metalness={0.9} roughness={0.3} />
+            <group position={[-0.005, 0.01, -0.06]} rotation={[0.45, 0.1, 0]}>
+              {/* Steel Wire Handle held inside curled fingers */}
+              <mesh position={[0, 0, -0.08]} castShadow>
+                <cylinderGeometry args={[0.0025, 0.0025, 0.22, 8]} />
+                <meshStandardMaterial color="#C0C0C0" metalness={0.95} roughness={0.2} />
               </mesh>
-              {/* Pyrotechnic Chemical Coating Zone */}
-              <mesh position={[0, 0, -0.24]}>
-                <cylinderGeometry args={[0.006, 0.006, 0.16, 8]} />
+              {/* Gunpowder Pyrotechnic Coating */}
+              <mesh position={[0, 0, -0.22]} castShadow>
+                <cylinderGeometry args={[0.0055, 0.0055, 0.18, 10]} />
                 <meshStandardMaterial
-                  color={sparklerIgnited ? '#FFE082' : '#616161'}
-                  roughness={0.85}
-                  emissive={sparklerIgnited ? '#FF9800' : '#000000'}
-                  emissiveIntensity={sparklerIgnited ? 2.5 : 0}
+                  color={sparklerIgnited ? '#333333' : '#616161'}
+                  roughness={0.95}
                 />
               </mesh>
               {/* Burning Core Light */}
@@ -436,11 +470,43 @@ export const FirstPersonHands: React.FC = () => {
 
           {/* E. HELD FIREWORK MODEL */}
           {handItem === 'firework' && heldFireworkType && (
-            <group position={[0.02, 0.04, -0.12]} rotation={[0.2, 0.1, 0]} scale={0.48}>
+            <group position={[0, 0.025, -0.09]} rotation={[0.2, 0.1, 0]} scale={0.48}>
               <FirecrackerModel type={heldFireworkType} />
             </group>
           )}
         </group>
+
+        {/* ==============================================================
+            LEFT ARTICULATED HUMAN HAND (Two-Hand Interaction for Rangoli Bowl)
+            ============================================================== */}
+        {handItem === 'powder' && (
+          <group position={[-0.22, -0.24, -0.44]} rotation={[0.25, 0.35, -0.1]}>
+            {/* Articulated Left Human Hand */}
+            <ArticulatedHandMesh isLeft={true} pose={leftHandCupPose} />
+
+            {/* Held Brass Katori (Bowl) sitting naturally on palm */}
+            <group position={[0.008, 0.028, -0.025]}>
+              {/* Heavy Hammered Brass Bowl */}
+              <mesh castShadow>
+                <cylinderGeometry args={[0.044, 0.028, 0.034, 20]} />
+                <meshStandardMaterial color="#D4AF37" metalness={0.92} roughness={0.22} />
+              </mesh>
+              {/* Engraved Auspicious Rim */}
+              <mesh position={[0, 0.017, 0]}>
+                <torusGeometry args={[0.045, 0.005, 8, 22]} />
+                <meshStandardMaterial color="#FFD700" metalness={0.96} roughness={0.15} />
+              </mesh>
+              {/* Vibrant Colored Powder Mound */}
+              <mesh position={[0, 0.014, 0]}>
+                <sphereGeometry args={[0.04, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5]} />
+                <meshStandardMaterial
+                  color={heldPowderColor || '#FFD54F'}
+                  roughness={0.95}
+                />
+              </mesh>
+            </group>
+          </group>
+        )}
       </group>
 
       {/* Global Sparkler Particles */}
@@ -461,23 +527,16 @@ export const FirstPersonHands: React.FC = () => {
         </points>
       )}
 
-      {/* Sparkler 3D Air-Drawing Light Ribbon Trails */}
-      {sparklerTrails.length > 1 && (
-        <line>
-          <bufferGeometry>
-            <bufferAttribute
-              attach="attributes-position"
-              args={[
-                new Float32Array(
-                  sparklerTrails.flatMap(pt => [pt.x, pt.y, pt.z])
-                ),
-                3,
-              ]}
-            />
-          </bufferGeometry>
-          <lineBasicMaterial color="#FFD700" linewidth={2.5} transparent opacity={0.85} />
-        </line>
-      )}
+      {/* Sparkler 3D Air-Drawing Light Ribbon Trails (Fixed GPU buffer, zero React re-renders) */}
+      <line ref={trailLineRef} visible={false}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[trailPositions, 3]}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial color="#FFD700" linewidth={2.5} transparent opacity={0.85} />
+      </line>
     </>
   );
 };

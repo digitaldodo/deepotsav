@@ -3,22 +3,20 @@ import { useGameState, GraphicsQuality } from '../../game/state/useGameState';
 import { audioManager } from '../../game/audio/AudioManager';
 
 export const PauseMenu: React.FC = () => {
-  const {
-    isPaused,
-    setPaused,
-    soundEnabled,
-    setSoundEnabled,
-    soundVolume,
-    setSoundVolume,
-    graphicsQuality,
-    setGraphicsQuality,
-    mouseSensitivity,
-    setMouseSensitivity,
-    touchSensitivity,
-    setTouchSensitivity,
-    replayCinematic,
-    resetGameProgress,
-  } = useGameState();
+  const isPaused = useGameState(s => s.isPaused);
+  const setPaused = useGameState(s => s.setPaused);
+  const soundEnabled = useGameState(s => s.soundEnabled);
+  const setSoundEnabled = useGameState(s => s.setSoundEnabled);
+  const soundVolume = useGameState(s => s.soundVolume);
+  const setSoundVolume = useGameState(s => s.setSoundVolume);
+  const graphicsQuality = useGameState(s => s.graphicsQuality);
+  const setGraphicsQuality = useGameState(s => s.setGraphicsQuality);
+  const mouseSensitivity = useGameState(s => s.mouseSensitivity);
+  const setMouseSensitivity = useGameState(s => s.setMouseSensitivity);
+  const touchSensitivity = useGameState(s => s.touchSensitivity);
+  const setTouchSensitivity = useGameState(s => s.setTouchSensitivity);
+  const replayCinematic = useGameState(s => s.replayCinematic);
+  const resetGameProgress = useGameState(s => s.resetGameProgress);
 
   if (!isPaused) return null;
 

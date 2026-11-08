@@ -7,15 +7,13 @@ interface Props {
 }
 
 export const ActivityJournal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const {
-    houseDoorOpen,
-    sweetsEatenTotal,
-    pujaBellRangCount,
-    litDiyas,
-    rangoliCompleted,
-    sparklerHolding,
-    fireworksLaunchCount,
-  } = useGameState();
+  const houseDoorOpen = useGameState(s => s.houseDoorOpen);
+  const sweetsEatenTotal = useGameState(s => s.sweetsEatenTotal);
+  const pujaBellRangCount = useGameState(s => s.pujaBellRangCount);
+  const litDiyas = useGameState(s => s.litDiyas);
+  const rangoliCompleted = useGameState(s => s.rangoliCompleted);
+  const sparklerHolding = useGameState(s => s.sparklerHolding);
+  const fireworksLaunchCount = useGameState(s => s.fireworksLaunchCount);
 
   if (!isOpen) return null;
 
@@ -83,7 +81,9 @@ export const ActivityJournal: React.FC<Props> = ({ isOpen, onClose }) => {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 text-white/70 hover:bg-white/20 flex items-center justify-center text-sm"
+            aria-label="Close Journal"
+            title="Close Journal"
+            className="w-8 h-8 rounded-full bg-white/10 text-white/70 hover:bg-white/20 flex items-center justify-center text-sm cursor-pointer"
           >
             ✕
           </button>

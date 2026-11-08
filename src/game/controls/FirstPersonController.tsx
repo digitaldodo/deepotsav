@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { useGameState, LocationName } from '../state/useGameState';
 import { touchInput } from './MobileVirtualControls';
 import { audioManager } from '../audio/AudioManager';
+import { ScreenRaycaster } from '../utils/ScreenRaycaster';
 
 // AABB Obstacle Colliders for Compact Playable World
 interface BoxCollider {
@@ -107,6 +108,7 @@ export const FirstPersonController: React.FC = () => {
     setPlacementValid,
     placeFireworkOnGround,
     cancelPlacement,
+    handItem,
   } = useGameState();
 
   const keys = useRef({
@@ -138,6 +140,8 @@ export const FirstPersonController: React.FC = () => {
 
   const placementModeRef = useRef(placementMode);
   placementModeRef.current = placementMode;
+
+  const lastSyncedPos = useRef(new THREE.Vector3(0, 1.65, 8.5));
 
   const placementPosRef = useRef(placementPos);
   placementPosRef.current = placementPos;
@@ -185,23 +189,30 @@ export const FirstPersonController: React.FC = () => {
     }
   };
 
-  // When entering placement mode: temporarily unlock mouse cursor
+  // When entering placement mode or rangoli powder drawing: unlock mouse cursor
   useEffect(() => {
-    if (placementMode) {
+    const canvas = gl.domElement;
+    if (placementMode || handItem === 'powder') {
       if (document.pointerLockElement) {
         try {
           document.exitPointerLock?.();
         } catch {}
       }
-      // Compute default placement in front of camera
-      const lookDir = camera.getWorldDirection(new THREE.Vector3());
-      const initX = Math.max(-5.0, Math.min(5.0, camera.position.x + lookDir.x * 2.8));
-      const initZ = Math.max(12.5, Math.min(18.0, camera.position.z + lookDir.z * 2.8));
-      const valid = !checkCollides(initX, initZ, 0.42);
-      setPlacementPos([initX, 0.03, initZ]);
-      setPlacementValid(valid);
+      canvas.style.cursor = 'crosshair';
+
+      if (placementMode) {
+        // Compute initial default placement
+        const lookDir = camera.getWorldDirection(new THREE.Vector3());
+        const initX = Math.max(-5.0, Math.min(5.0, camera.position.x + lookDir.x * 2.8));
+        const initZ = Math.max(12.5, Math.min(18.0, camera.position.z + lookDir.z * 2.8));
+        const valid = !checkCollides(initX, initZ, 0.42);
+        setPlacementPos([initX, 0.03, initZ]);
+        setPlacementValid(valid);
+      }
+    } else {
+      canvas.style.cursor = 'default';
     }
-  }, [placementMode, camera, setPlacementPos, setPlacementValid]);
+  }, [placementMode, handItem, camera, gl, setPlacementPos, setPlacementValid]);
 
   // Pointer lock, mouse look, and direct click interaction
   useEffect(() => {
@@ -215,11 +226,24 @@ export const FirstPersonController: React.FC = () => {
       if (isPaused || cinematicActive) return;
 
       if (placementModeRef.current || useGameState.getState().placementMode) {
-        // In placement mode, mouse cursor is free: calculate exact raycast hit
-        const rect = canvas.getBoundingClientRect();
-        const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-        updateGroundPlacement(ndcX, ndcY);
+        // In placement mode, mouse cursor is free: calculate exact raycast hit using shared ScreenRaycaster
+        const result = ScreenRaycaster.raycastGroundPlacement(
+          e.clientX,
+          e.clientY,
+          canvas,
+          camera,
+          0.03,
+          checkCollides
+        );
+        if (result) {
+          setPlacementPos([result.hitPoint.x, 0.03, result.hitPoint.z]);
+          setPlacementValid(result.valid);
+        }
+        return;
+      }
+
+      // When holding rangoli powder, mouse cursor is free for drawing without camera lock
+      if (useGameState.getState().handItem === 'powder') {
         return;
       }
 
@@ -236,17 +260,23 @@ export const FirstPersonController: React.FC = () => {
 
     const onClick = (e: MouseEvent) => {
       if (isPaused || !gameStarted || cinematicActive) return;
+      if ((e.target as HTMLElement)?.closest('button')) return;
 
-      if (placementModeRef.current) {
+      const state = useGameState.getState();
+      if (placementModeRef.current || state.placementMode) {
         // In placement mode: Click confirms placement at pointer's world coordinates!
-        if (placementValidRef.current) {
-          placeFireworkOnGround(placementPosRef.current);
+        if (state.placementValid) {
+          placeFireworkOnGround(state.placementPos);
           audioManager.playPowderPickup();
-          // Restore pointer lock after placing
           if (!('ontouchstart' in window)) {
             canvas.requestPointerLock?.();
           }
         }
+        return;
+      }
+
+      // When drawing rangoli, do not lock pointer
+      if (state.handItem === 'powder') {
         return;
       }
 
@@ -280,23 +310,31 @@ export const FirstPersonController: React.FC = () => {
     const onTouchMove = (e: TouchEvent) => {
       if (placementModeRef.current && e.touches.length > 0) {
         const touch = e.touches[0];
-        const rect = canvas.getBoundingClientRect();
-        const ndcX = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        const ndcY = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        updateGroundPlacement(ndcX, ndcY);
+        const result = ScreenRaycaster.raycastGroundPlacement(
+          touch.clientX,
+          touch.clientY,
+          canvas,
+          camera,
+          0.03,
+          checkCollides
+        );
+        if (result) {
+          setPlacementPos([result.hitPoint.x, 0.03, result.hitPoint.z]);
+          setPlacementValid(result.valid);
+        }
       }
     };
 
     document.addEventListener('pointerlockchange', onPointerLockChange);
     window.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('click', onClick);
+    window.addEventListener('click', onClick);
     canvas.addEventListener('contextmenu', onContextMenu);
     canvas.addEventListener('touchmove', onTouchMove, { passive: true });
 
     return () => {
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       window.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('click', onClick);
+      window.removeEventListener('click', onClick);
       canvas.removeEventListener('contextmenu', onContextMenu);
       canvas.removeEventListener('touchmove', onTouchMove);
     };
@@ -394,8 +432,8 @@ export const FirstPersonController: React.FC = () => {
   useFrame((_, delta) => {
     if (cinematicActive || isPaused || !gameStarted) return;
 
-    // 1. Mobile Touch Look
-    if (touchInput.lookDeltaX !== 0 || touchInput.lookDeltaY !== 0) {
+    // 1. Mobile Touch Look (skip if suspended while drawing rangoli)
+    if (!touchInput.suspended && (touchInput.lookDeltaX !== 0 || touchInput.lookDeltaY !== 0)) {
       const factor = 1.0 * touchSensitivity;
       euler.current.y -= touchInput.lookDeltaX * factor;
       euler.current.x -= touchInput.lookDeltaY * factor;
@@ -415,7 +453,7 @@ export const FirstPersonController: React.FC = () => {
     if (keys.current.left) sideInput -= 1;
     if (keys.current.right) sideInput += 1;
 
-    if (touchInput.isMoving) {
+    if (!touchInput.suspended && touchInput.isMoving) {
       forwardInput += touchInput.moveY;
       sideInput += touchInput.moveX;
     }
@@ -484,8 +522,11 @@ export const FirstPersonController: React.FC = () => {
 
     camera.position.y = 1.65 + headBobOffset;
 
-    // Sync player position in state for 3D audio distance calculations
-    setPlayerPosition([camera.position.x, camera.position.y, camera.position.z]);
+    // Sync player position in state when significant movement occurs (prevents per-frame React thrashing)
+    if (camera.position.distanceToSquared(lastSyncedPos.current) > 0.08) {
+      lastSyncedPos.current.copy(camera.position);
+      setPlayerPosition([camera.position.x, camera.position.y, camera.position.z]);
+    }
 
     // 4. Center-Screen Raycasting for Physical Interactions
     if (!placementModeRef.current) {
