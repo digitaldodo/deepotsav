@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+/* =============================================
+   DEEPOTSAV — Premium Diwali Design System
+   ============================================= */
+
+@layer base {
+  :root {
+    /* === Core Festive Palette === */
+    --gold: #D4AF37;
+    --gold-light: #F0D060;
+    --gold-dark: #9A7D1A;
+    --gold-metallic: #C9A84C;
+    --saffron: #FF6B35;
+    --saffron-light: #FF8E60;
+    --marigold: #FFC107;
+    --marigold-dark: #E6A817;
+    --vermilion: #E8341A;
+    --ivory: #FEFDF5;
+    --ivory-warm: #FFF8E7;
+    --midnight: #0A0A1A;
+    --midnight-blue: #0D1B2A;
+    --charcoal: #1A1A2E;
+    --deep-navy: #16213E;
+    --deep-purple: #0F0E17;
+
+    /* === Semantic Tokens === */
+    --color-primary: var(--gold);
+    --color-accent: var(--saffron);
+    --color-bg: var(--midnight);
+    --color-surface: var(--charcoal);
+    --color-text: var(--ivory);
+    --color-text-muted: rgba(254, 253, 245, 0.6);
+
+    /* === Typography Scale === */
+    --font-display: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+
+    /* === Motion === */
+    --ease-festive: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-reveal: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--midnight);
+    color: var(--ivory);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  /* Custom scrollbar for festive feel */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0A0A1A;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(212, 175, 55, 0.3);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 175, 55, 0.6);
+  }
+}
+
+/* === Typography Utilities === */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-body {
+  font-family: var(--font-body);
+}
+
+/* === Decorative Gold Foil Effect === */
+.gold-foil-text {
+  background: linear-gradient(135deg, #F0D060 0%, #D4AF37 40%, #FFE57F 60%, #9A7D1A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gold-gradient-border {
+  border-image: linear-gradient(135deg, #F0D060, #D4AF37, #FFE57F, #9A7D1A) 1;
+}
+
+/* === Ambient Glow Utilities === */
+.glow-diya {
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.4), 0 0 40px rgba(212, 175, 55, 0.2);
+}
+
+.glow-gold {
+  box-shadow: 0 0 25px rgba(212, 175, 55, 0.35);
+}
+
+.glow-text-gold {
+  text-shadow: 0 0 12px rgba(212, 175, 55, 0.5), 0 0 24px rgba(212, 175, 55, 0.25);
+}
+
+/* === Subtle Animations === */
+@keyframes flameFlicker {
+  0%, 100% {
+    transform: scale(1) rotate(-1deg);
+    opacity: 0.95;
+    filter: drop-shadow(0 0 8px #FF6B35);
+  }
+  25% {
+    transform: scale(1.05, 0.95) rotate(1deg);
+    opacity: 1;
+    filter: drop-shadow(0 0 12px #FF8E60);
+  }
+  50% {
+    transform: scale(0.95, 1.05) rotate(-0.5deg);
+    opacity: 0.9;
+    filter: drop-shadow(0 0 10px #FFC107);
+  }
+  75% {
+    transform: scale(1.02, 0.98) rotate(1.5deg);
+    opacity: 1;
+    filter: drop-shadow(0 0 14px #FF6B35);
+  }
+}
+
+.animate-flame {
+  animation: flameFlicker 1.8s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float {
+  animation: gentleFloat 4s ease-in-out infinite;
+}
+
+@keyframes shimmerEffect {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.shimmer-gold {
+  background: linear-gradient(
+    90deg,
+    rgba(212, 175, 55, 0) 0%,
+    rgba(212, 175, 55, 0.35) 50%,
+    rgba(212, 175, 55, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerEffect 3s infinite;
+}
+
+/* Canvas styling for 3D viewport */
+canvas {
+  touch-action: none;
+}
