@@ -5,34 +5,27 @@ import * as THREE from 'three';
 export const Decorations: React.FC = () => {
   const particlesRef = useRef<THREE.Points>(null);
 
-  // Generate 150 glowing floating festive particles (golden fireflies / diya motes)
-  const [particlePositions, particleSpeeds] = useMemo(() => {
-    const count = 150;
-    const positions = new Float32Array(count * 3);
-    const speeds = new Float32Array(count);
-
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 45;
-      positions[i * 3 + 1] = 0.5 + Math.random() * 7;
-      positions[i * 3 + 2] = -12 + Math.random() * 52;
-      speeds[i] = 0.2 + Math.random() * 0.5;
+  // 120 Floating golden firefly motes / festive dust particles
+  const particleCount = 120;
+  const particlePositions = useMemo(() => {
+    const pos = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 50;
+      pos[i * 3 + 1] = 0.5 + Math.random() * 8;
+      pos[i * 3 + 2] = -12 + Math.random() * 52;
     }
-    return [positions, speeds];
+    return pos;
   }, []);
 
-  useFrame((_, delta) => {
+  useFrame(state => {
     if (!particlesRef.current) return;
-    const pos = particlesRef.current.geometry.attributes.position.array as Float32Array;
+    const time = state.clock.getElapsedTime();
+    const positions = particlesRef.current.geometry.attributes.position.array as Float32Array;
 
-    for (let i = 0; i < 150; i++) {
-      // Gentle floating upward & sinusoidal sway
-      pos[i * 3 + 1] += particleSpeeds[i] * delta * 0.4;
-      pos[i * 3] += Math.sin(Date.now() * 0.001 + i) * delta * 0.15;
-
-      // Wrap around if too high
-      if (pos[i * 3 + 1] > 8) {
-        pos[i * 3 + 1] = 0.5;
-      }
+    for (let i = 0; i < particleCount; i++) {
+      const idx = i * 3;
+      positions[idx + 1] += Math.sin(time + i) * 0.003;
+      positions[idx] += Math.cos(time * 0.6 + i) * 0.002;
     }
     particlesRef.current.geometry.attributes.position.needsUpdate = true;
   });
@@ -42,7 +35,7 @@ export const Decorations: React.FC = () => {
       {/* Night Sky Stars Dome */}
       <mesh position={[0, 15, 10]}>
         <sphereGeometry args={[75, 24, 24]} />
-        <meshBasicMaterial color="#030511" side={THREE.BackSide} />
+        <meshBasicMaterial color="#0A0B1A" side={THREE.BackSide} />
       </mesh>
 
       {/* Floating Golden Fireflies / Motes */}
@@ -53,14 +46,15 @@ export const Decorations: React.FC = () => {
             args={[particlePositions, 3]}
           />
         </bufferGeometry>
-        <pointsMaterial size={0.06} color="#FFD700" transparent opacity={0.7} />
+        <pointsMaterial size={0.065} color="#FFD700" transparent opacity={0.75} />
       </points>
 
-      {/* Ambient Night Lights */}
-      <ambientLight intensity={0.28} color="#1A1C30" />
-      <directionalLight position={[10, 25, 15]} intensity={0.22} color="#8DA9C4" />
-      {/* Warm Ground Bounce Light */}
-      <hemisphereLight args={['#2A1B4E', '#160F29', 0.25]} />
+      {/* ==============================================================
+          WARM ILLUMINATION SYSTEM — ENSURES VIBRANT VISIBILITY ON ALL SCREENS
+          ============================================================== */}
+      <ambientLight intensity={1.1} color="#FFF1DB" />
+      <directionalLight position={[15, 30, 20]} intensity={0.85} color="#FFE6AA" />
+      <hemisphereLight args={['#FFE4B5', '#2B1810', 0.8]} />
     </group>
   );
 };

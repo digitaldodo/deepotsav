@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { useGameState } from '../../game/state/useGameState';
 import { audioManager } from '../../game/audio/AudioManager';
 import { ActivityJournal } from './ActivityJournal';
-import { RangoliOverlay } from './RangoliOverlay';
-import { PhotoInspectionModal } from './PhotoInspectionModal';
 
 export const GameHUD: React.FC = () => {
   const {
@@ -19,6 +17,11 @@ export const GameHUD: React.FC = () => {
     rangoliCompleted,
     sparklerHolding,
     fireworksLaunchCount,
+    handItem,
+    heldPowderName,
+    heldPowderColor,
+    heldSweetType,
+    clearHand,
   } = useGameState();
 
   const [journalOpen, setJournalOpen] = useState(false);
@@ -51,6 +54,36 @@ export const GameHUD: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* In-Hand Active Item Pill */}
+            {handItem !== 'none' && (
+              <div className="hidden xs:flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-black/70 border border-white/20 backdrop-blur-md shadow-lg animate-[fade-in_0.3s_ease-out]">
+                <div
+                  className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-sm"
+                  style={{
+                    backgroundColor:
+                      handItem === 'powder'
+                        ? heldPowderColor || '#FFC107'
+                        : handItem === 'sweet'
+                        ? '#FFB300'
+                        : '#FFD700',
+                  }}
+                />
+                <span className="text-xs font-medium text-white/90">
+                  {handItem === 'powder' && (heldPowderName || 'Rangoli Powder')}
+                  {handItem === 'sweet' && (heldSweetType || 'Sweet')}
+                  {handItem === 'diya_stick' && 'Lighting Stick'}
+                  {handItem === 'sparkler' && 'Phuljhadi Sparkler'}
+                </span>
+                <button
+                  onClick={clearHand}
+                  className="ml-1 text-[11px] text-white/50 hover:text-white px-1 hover:bg-white/10 rounded"
+                  title="Put away"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Top Right Actions */}
@@ -91,13 +124,18 @@ export const GameHUD: React.FC = () => {
           </div>
         </header>
 
+        {/* Center Minimal First-Person Reticle */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center opacity-70">
+          <div className="w-2 h-2 rounded-full border border-white/80 bg-white/40 shadow-[0_0_6px_rgba(255,255,255,0.8)]" />
+        </div>
+
         {/* Desktop Controls Overlay Guide (Hidden on Touch Screen) */}
         <div className="hidden sm:flex items-center justify-between text-xs text-white/50 bg-black/30 backdrop-blur-sm px-4 py-1.5 rounded-xl border border-white/5 max-w-lg mx-auto">
           <span>[W,A,S,D] Walk</span>
           <span>•</span>
           <span>[Mouse] Look Around</span>
           <span>•</span>
-          <span>[E] Interact</span>
+          <span>[E] Interact / Hand Action</span>
           <span>•</span>
           <span>[Shift] Sprint</span>
           <span>•</span>
@@ -110,21 +148,25 @@ export const GameHUD: React.FC = () => {
             <button
               onClick={() => activePrompt.action()}
               className="px-6 py-3 rounded-2xl bg-gradient-to-r from-[#D4AF37] to-[#FF6B35] text-black font-extrabold text-sm shadow-2xl flex items-center gap-2 border border-white/30 hover:scale-105 active:scale-95 transition-transform"
+              style={{ boxShadow: '0 0 25px rgba(212, 175, 55, 0.5)' }}
             >
               <span className="text-lg">✨</span>
               <span>{activePrompt.label}</span>
-              <span className="text-[11px] px-2 py-0.5 rounded-md bg-black/20 text-black">
+              <span className="text-[11px] px-2 py-0.5 rounded-md bg-black/20 text-black font-bold">
                 Press [E]
               </span>
             </button>
+            {activePrompt.subtext && (
+              <div className="text-xs text-white/80 mt-1.5 drop-shadow font-medium">
+                {activePrompt.subtext}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Overlays */}
+      {/* Activity Journal Checklist */}
       <ActivityJournal isOpen={journalOpen} onClose={() => setJournalOpen(false)} />
-      <RangoliOverlay />
-      <PhotoInspectionModal />
     </>
   );
 };

@@ -8,48 +8,52 @@ export const PujaCorner: React.FC = () => {
   const {
     playerPosition,
     setActivePrompt,
-    ringPujaBell,
-    offerFlowers,
+    ringBellWithHand,
     pujaBellRangCount,
     flowersOfferedCount,
+    offerFlowers,
     litDiyas,
-    lightDiya,
+    lightTargetDiya,
   } = useGameState();
 
   const bellRef = useRef<THREE.Group>(null);
+  const bellSwingTimeRef = useRef<number>(0);
 
-  // Animate bell swing when recently rung
+  // Animate swinging bell with decaying oscillation
   useFrame((_, delta) => {
     if (bellRef.current) {
-      if (pujaBellRangCount > 0) {
-        bellRef.current.rotation.z = Math.sin(Date.now() * 0.015) * 0.3 * Math.exp(-0.8 * (Date.now() % 3000) / 1000);
+      if (bellSwingTimeRef.current > 0) {
+        bellSwingTimeRef.current -= delta;
+        const decay = Math.max(0, bellSwingTimeRef.current / 2.0);
+        bellRef.current.rotation.z = Math.sin(bellSwingTimeRef.current * 16) * 0.35 * decay;
+      } else {
+        bellRef.current.rotation.z = 0;
       }
     }
 
-    // Proximity check: Puja corner is at [ -5.5, 0, -12 ]
-    const distToPuja = Math.hypot(playerPosition[0] - (-5.5), playerPosition[2] - (-12));
-    if (distToPuja < 2.5) {
-      // Prioritize bell ring, then flower offering, then diya lighting
-      if (!litDiyas['puja-samai-left'] || !litDiyas['puja-samai-right']) {
+    // Proximity check to Mandir at [ -5.5, 0, -12 ]
+    const dist = Math.hypot(playerPosition[0] - (-5.5), playerPosition[2] - (-12));
+    if (dist < 3.2) {
+      if (!litDiyas['puja-samai-right']) {
         setActivePrompt({
           id: 'puja-diya',
-          label: 'Light Sacred Puja Diya 🪔',
-          subtext: 'Press [E] or Tap',
+          label: 'Light Mandir Brass Samai 🪔',
+          subtext: 'Press [E] or Tap with lighting stick',
           action: () => {
             audioManager.playDiyaLight();
-            if (!litDiyas['puja-samai-left']) lightDiya('puja-samai-left');
-            else lightDiya('puja-samai-right');
+            lightTargetDiya('puja-samai-right');
           },
         });
       } else {
         setActivePrompt({
           id: 'puja-bell',
           label: 'Ring Sacred Temple Bell 🔔',
-          subtext: 'Press [E] or Tap for Blessing',
+          subtext: 'Press [E] or Tap for harmonic blessing',
           action: () => {
             audioManager.playPujaBell();
-            ringPujaBell();
+            ringBellWithHand();
             offerFlowers();
+            bellSwingTimeRef.current = 2.0;
           },
         });
       }
@@ -92,7 +96,7 @@ export const PujaCorner: React.FC = () => {
           ))
         )}
 
-        {/* Mandir Shikhara (Traditional Tiered Temple Dome / Shikhar) */}
+        {/* Mandir Shikhara (Traditional Tiered Temple Dome) */}
         <mesh position={[0, 2.8, 0]} castShadow>
           <boxGeometry args={[2.6, 0.3, 1.4]} />
           <meshStandardMaterial color="#5C2C16" roughness={0.4} />
@@ -144,7 +148,7 @@ export const PujaCorner: React.FC = () => {
       {/* Tall Brass Diyas (Samai / Kuthu Vilakku) on Left & Right */}
       {[-1.3, 1.3].map((x, i) => {
         const diyaKey = i === 0 ? 'puja-samai-left' : 'puja-samai-right';
-        const isLit = litDiyas[diyaKey] ?? true; // left diya starts lit for festive beauty
+        const isLit = litDiyas[diyaKey] ?? true;
         return (
           <group key={i} position={[x, 0.4, 0.3]}>
             {/* Tall slender brass stem */}
@@ -164,7 +168,10 @@ export const PujaCorner: React.FC = () => {
                   <sphereGeometry args={[0.05, 8, 8]} />
                   <meshBasicMaterial color="#FF5722" />
                 </mesh>
-                <pointLight color="#FFA500" intensity={1.6} distance={4} decay={2} />
+                <mesh position={[0, 0.04, 0]}>
+                  <coneGeometry args={[0.03, 0.08, 8]} />
+                  <meshBasicMaterial color="#FFEB3B" />
+                </mesh>
               </group>
             )}
           </group>
@@ -193,13 +200,13 @@ export const PujaCorner: React.FC = () => {
             ]}
           >
             <sphereGeometry args={[0.035, 6, 6]} />
-            <meshStandardMaterial color={idx % 2 === 0 ? '#FFA500' : '#E91E63'} roughness={0.5} />
+            <meshStandardMaterial color={idx % 2 === 0 ? '#FFA500' : '#FFD700'} />
           </mesh>
         ))}
       </group>
 
-      {/* Holy Divine Aura Point Light inside Mandir */}
-      <pointLight position={[0, 1.8, -0.3]} color="#FFD700" intensity={2.8} distance={7} decay={2} />
+      {/* Warm Sanctum Light */}
+      <pointLight position={[0, 2.2, 0]} color="#FFD700" intensity={2.0} distance={8} decay={2} />
     </group>
   );
 };

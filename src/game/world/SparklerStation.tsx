@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameState } from '../state/useGameState';
@@ -17,11 +17,26 @@ export const SparklerStation: React.FC = () => {
     addSparklerTrailPoint,
     updateSparklerTrails,
     sparklerTrails,
-    sparklerBurnTime,
   } = useGameState();
 
-  const sparklerStickRef = useRef<THREE.Group>(null);
   const sparkParticlesRef = useRef<THREE.Points>(null);
+
+  // Spark shower particle count
+  const sparkCount = 60;
+  const { sparkPositions, sparkVelocities } = useMemo(() => {
+    const pos = new Float32Array(sparkCount * 3);
+    const vel = new Float32Array(sparkCount * 3);
+    for (let i = 0; i < sparkCount; i++) {
+      pos[i * 3] = 0;
+      pos[i * 3 + 1] = 0;
+      pos[i * 3 + 2] = 0;
+
+      vel[i * 3] = (Math.random() - 0.5) * 1.8;
+      vel[i * 3 + 1] = (Math.random() - 0.5) * 1.8;
+      vel[i * 3 + 2] = (Math.random() - 0.5) * 1.8;
+    }
+    return { sparkPositions: pos, sparkVelocities: vel };
+  }, []);
 
   // Proximity check to sparkler station at [ 0, 0, 31 ]
   useFrame((_, delta) => {
@@ -34,7 +49,7 @@ export const SparklerStation: React.FC = () => {
         setActivePrompt({
           id: 'pickup-sparkler',
           label: 'Pick up Phuljhadi (Sparkler) ✨',
-          subtext: 'Press [E] or Tap',
+          subtext: 'Press [E] or Tap to take in hand',
           action: () => {
             audioManager.playDiyaLight();
             pickupSparkler();
@@ -44,7 +59,7 @@ export const SparklerStation: React.FC = () => {
         setActivePrompt({
           id: 'ignite-sparkler',
           label: 'Ignite Sparkler! 💥',
-          subtext: 'Press [E] or Tap to Light',
+          subtext: 'Press [E] or Tap to light',
           action: () => {
             audioManager.startSparklerLoop();
             igniteSparkler();
@@ -53,8 +68,8 @@ export const SparklerStation: React.FC = () => {
       } else {
         setActivePrompt({
           id: 'drop-sparkler',
-          label: 'Put Down Sparkler (Draw in air) 🪄',
-          subtext: 'Press [E] or Tap',
+          label: 'Put Down Sparkler (Draw in Air) 🪄',
+          subtext: 'Press [E] or Tap to finish',
           action: () => {
             audioManager.stopSparklerLoop();
             dropSparkler();
@@ -63,30 +78,43 @@ export const SparklerStation: React.FC = () => {
       }
     }
 
-    // If holding sparkler, position the sparkler stick right in front of the camera in first-person!
-    if (sparklerHolding && sparklerStickRef.current) {
-      // Calculate position ~0.4m right, -0.3m down, and 0.7m in front of camera
-      const offset = new THREE.Vector3(0.3, -0.25, -0.65).applyQuaternion(camera.quaternion);
-      sparklerStickRef.current.position.copy(camera.position).add(offset);
-      sparklerStickRef.current.quaternion.copy(camera.quaternion);
+    // When holding ignited sparkler, record tip trail in 3D world space
+    if (sparklerHolding && sparklerIgnited) {
+      // Hand sparkler tip in front of camera
+      const tipOffset = new THREE.Vector3(0.24, -0.15, -0.7).applyQuaternion(camera.quaternion);
+      const tipWorldPos = camera.position.clone().add(tipOffset);
 
-      // If ignited, add glowing trail point at tip
-      if (sparklerIgnited) {
-        const tipOffset = new THREE.Vector3(0, 0.25, 0).applyQuaternion(camera.quaternion);
-        const tipPos = sparklerStickRef.current.position.clone().add(tipOffset);
-        addSparklerTrailPoint({
-          x: tipPos.x,
-          y: tipPos.y,
-          z: tipPos.z,
-          color: '#FFD700',
-        });
+      addSparklerTrailPoint({
+        x: tipWorldPos.x,
+        y: tipWorldPos.y,
+        z: tipWorldPos.z,
+        color: '#FFD700',
+      });
+
+      // Update particle spark shower
+      if (sparkParticlesRef.current) {
+        sparkParticlesRef.current.position.copy(tipWorldPos);
+        const positions = sparkParticlesRef.current.geometry.attributes.position.array as Float32Array;
+        for (let i = 0; i < sparkCount; i++) {
+          positions[i * 3] += sparkVelocities[i * 3] * delta;
+          positions[i * 3 + 1] += sparkVelocities[i * 3 + 1] * delta;
+          positions[i * 3 + 2] += sparkVelocities[i * 3 + 2] * delta;
+
+          // Reset particle to center
+          if (Math.hypot(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]) > 0.35) {
+            positions[i * 3] = (Math.random() - 0.5) * 0.04;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 0.04;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 0.04;
+          }
+        }
+        sparkParticlesRef.current.geometry.attributes.position.needsUpdate = true;
       }
     }
   });
 
   return (
     <group position={[0, 0, 0]}>
-      {/* Wooden Sparkler Table in Community Park at [0, 0, 31] */}
+      {/* Wooden Sparkler Stand Table in Community Park at [0, 0, 31] */}
       <group position={[0, 0, 31]}>
         {/* Table Top */}
         <mesh position={[0, 0.75, 0]} castShadow receiveShadow>
@@ -103,13 +131,12 @@ export const SparklerStation: React.FC = () => {
           ))
         )}
 
-        {/* Traditional Diwali Sparkler Box (Murga Brand / Peacock Brand Box) */}
+        {/* Traditional Diwali Sparkler Box */}
         <group position={[-0.35, 0.85, 0]}>
           <mesh castShadow>
             <boxGeometry args={[0.3, 0.12, 0.5]} />
             <meshStandardMaterial color="#D90429" roughness={0.4} />
           </mesh>
-          {/* Label print on box */}
           <mesh position={[0, 0.065, 0]}>
             <planeGeometry args={[0.26, 0.44]} />
             <meshStandardMaterial color="#FFD700" roughness={0.3} />
@@ -122,7 +149,6 @@ export const SparklerStation: React.FC = () => {
             <cylinderGeometry args={[0.1, 0.08, 0.2, 16]} />
             <meshStandardMaterial color="#D4AF37" metalness={0.9} roughness={0.2} />
           </mesh>
-          {/* Several sparkler wire stems standing */}
           {[-0.04, 0, 0.04].map((ox, i) => (
             <mesh key={i} position={[ox, 0.22, (i - 1) * 0.03]} rotation={[0.1 * i, 0, 0.08 * i]}>
               <cylinderGeometry args={[0.005, 0.005, 0.45, 6]} />
@@ -131,77 +157,33 @@ export const SparklerStation: React.FC = () => {
           ))}
         </group>
 
-        {/* Signboard: "SPARKLER STATION" */}
+        {/* Signboard */}
         <mesh position={[0, 1.25, -0.38]}>
           <boxGeometry args={[1.2, 0.25, 0.04]} />
           <meshStandardMaterial color="#FFB703" roughness={0.5} />
         </mesh>
       </group>
 
-      {/* First-Person Handheld Sparkler Model (attached near camera when holding) */}
-      {sparklerHolding && (
-        <group ref={sparklerStickRef}>
-          {/* Wire Stem */}
-          <mesh position={[0, 0, 0]} rotation={[0, 0, -Math.PI / 6]}>
-            <cylinderGeometry args={[0.006, 0.006, 0.55, 8]} />
-            <meshStandardMaterial color="#B0B0B0" metalness={0.9} roughness={0.1} />
-          </mesh>
-          {/* Grey Pyrotechnic Powder Chemical Coating */}
-          <mesh position={[0.07, 0.12, 0]} rotation={[0, 0, -Math.PI / 6]}>
-            <cylinderGeometry args={[0.014, 0.014, 0.35, 8]} />
-            <meshStandardMaterial color="#4A4A4A" roughness={0.9} />
-          </mesh>
-
-          {/* Sparkler Flame & Dynamic Sparks Emitter */}
-          {sparklerIgnited && (
-            <group position={[0.16, 0.26, 0]}>
-              {/* Glowing Core */}
-              <mesh>
-                <sphereGeometry args={[0.035, 8, 8]} />
-                <meshBasicMaterial color="#FFFFFF" />
-              </mesh>
-              {/* Point Light illuminating player hand & surroundings */}
-              <pointLight color="#FFD700" intensity={2.5} distance={4.5} decay={2} />
-
-              {/* Sparks Particles Sprayed outward */}
-              <points ref={sparkParticlesRef}>
-                <bufferGeometry>
-                  <bufferAttribute
-                    attach="attributes-position"
-                    args={[
-                      new Float32Array(
-                        [...Array(30)].flatMap(() => [
-                          (Math.random() - 0.5) * 0.4,
-                          (Math.random() - 0.5) * 0.4,
-                          (Math.random() - 0.5) * 0.4,
-                        ])
-                      ),
-                      3,
-                    ]}
-                  />
-                </bufferGeometry>
-                <pointsMaterial size={0.03} color="#FFA500" transparent opacity={0.9} />
-              </points>
-            </group>
-          )}
-        </group>
-      )}
-
-      {/* Render 3D Glowing Spark Trails drawn in air */}
-      {sparklerTrails.length > 1 && (
-        <points>
+      {/* Spark shower particle emitter when ignited */}
+      {sparklerHolding && sparklerIgnited && (
+        <points ref={sparkParticlesRef}>
           <bufferGeometry>
             <bufferAttribute
               attach="attributes-position"
-              args={[
-                new Float32Array(sparklerTrails.flatMap(p => [p.x, p.y, p.z])),
-                3,
-              ]}
+              args={[sparkPositions, 3]}
             />
           </bufferGeometry>
-          <pointsMaterial size={0.045} color="#FFD700" transparent opacity={0.8} />
+          <pointsMaterial size={0.03} color="#FFFFFF" transparent opacity={0.95} />
         </points>
       )}
+
+      {/* 3D Glowing Spark Trails drawn in the air */}
+      {sparklerTrails.map((pt, idx) => (
+        <mesh key={idx} position={[pt.x, pt.y, pt.z]}>
+          <sphereGeometry args={[0.025 * pt.life, 6, 6]} />
+          <meshBasicMaterial color="#FFD700" transparent opacity={pt.life} />
+        </mesh>
+      ))}
     </group>
   );
 };

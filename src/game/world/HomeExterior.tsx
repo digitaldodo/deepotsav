@@ -23,7 +23,7 @@ export const HomeExterior: React.FC = () => {
     if (distToDoor < 2.5) {
       setActivePrompt({
         id: 'door-toggle',
-        label: houseDoorOpen ? 'Close Front Door' : 'Open Front Door',
+        label: houseDoorOpen ? 'Close Front Door 🚪' : 'Open Front Door 🚪',
         subtext: 'Press [E] or Tap',
         action: () => {
           audioManager.playDoorToggle();
@@ -35,7 +35,7 @@ export const HomeExterior: React.FC = () => {
 
   return (
     <group position={[0, 0, 0]}>
-      {/* House Front Façade Wall (Ivory/Terracotta textured Indian house) */}
+      {/* House Front Façade Wall (Warm Terracotta & Sandstone textured Indian house) */}
       <mesh position={[-8.5, 3, 0]} receiveShadow castShadow>
         <boxGeometry args={[13, 6, 0.4]} />
         <meshStandardMaterial color="#E8D5B5" roughness={0.7} />
@@ -77,7 +77,7 @@ export const HomeExterior: React.FC = () => {
                 color={i % 2 === 0 ? '#FF8C00' : '#FFD700'}
                 roughness={0.4}
                 emissive={i % 2 === 0 ? '#FF4500' : '#FFA500'}
-                emissiveIntensity={0.2}
+                emissiveIntensity={0.6}
               />
             </mesh>
           ))}
@@ -112,20 +112,21 @@ export const HomeExterior: React.FC = () => {
         <meshStandardMaterial color="#A0522D" roughness={0.6} />
       </mesh>
 
-      {/* Windows with Warm Lighting on Left & Right Wings */}
+      {/* Windows with Warm Emissive Glow on Left & Right Wings */}
       <group position={[-5, 2.2, 0]}>
-        {/* Window frame */}
         <mesh castShadow>
           <boxGeometry args={[2, 2, 0.2]} />
           <meshStandardMaterial color="#4A2306" roughness={0.5} />
         </mesh>
-        {/* Glowing glass */}
         <mesh position={[0, 0, 0.05]}>
           <planeGeometry args={[1.7, 1.7]} />
-          <meshBasicMaterial color="#FFB703" />
+          <meshStandardMaterial
+            color="#FFB703"
+            emissive="#FF8C00"
+            emissiveIntensity={1.5}
+            roughness={0.2}
+          />
         </mesh>
-        {/* Warm Point Light escaping window */}
-        <pointLight position={[0, 0, 0.5]} color="#FFA500" intensity={1.4} distance={6} decay={2} />
       </group>
 
       <group position={[5, 2.2, 0]}>
@@ -135,9 +136,13 @@ export const HomeExterior: React.FC = () => {
         </mesh>
         <mesh position={[0, 0, 0.05]}>
           <planeGeometry args={[1.7, 1.7]} />
-          <meshBasicMaterial color="#FFB703" />
+          <meshStandardMaterial
+            color="#FFB703"
+            emissive="#FF8C00"
+            emissiveIntensity={1.5}
+            roughness={0.2}
+          />
         </mesh>
-        <pointLight position={[0, 0, 0.5]} color="#FFA500" intensity={1.4} distance={6} decay={2} />
       </group>
 
       {/* Traditional Clay Diyas lining the entrance steps */}
@@ -149,15 +154,21 @@ export const HomeExterior: React.FC = () => {
               <cylinderGeometry args={[0.1, 0.06, 0.06, 12]} />
               <meshStandardMaterial color="#8B4513" roughness={0.7} />
             </mesh>
-            {/* Glowing Flame */}
+            {/* Glowing Flame with High Emissive Glow */}
             <mesh position={[0, 0.06, 0]}>
-              <sphereGeometry args={[0.04, 8, 8]} />
-              <meshBasicMaterial color="#FF4500" />
+              <sphereGeometry args={[0.045, 8, 8]} />
+              <meshStandardMaterial
+                color="#FF5722"
+                emissive="#FFA500"
+                emissiveIntensity={3.0}
+              />
             </mesh>
-            <pointLight position={[0, 0.1, 0]} color="#FFA500" intensity={0.9} distance={2.5} decay={2} />
           </group>
         ))}
       </group>
+
+      {/* Consolidated warm entrance porch lantern point light */}
+      <pointLight position={[0, 3.2, 1.2]} color="#FFA500" intensity={1.8} distance={7} decay={2} />
 
       {/* House Roof Eaves with Hanging Fairy Lights */}
       <mesh position={[0, 6.2, 0.4]} castShadow>
@@ -169,7 +180,11 @@ export const HomeExterior: React.FC = () => {
         {[...Array(28)].map((_, i) => (
           <mesh key={i} position={[(i - 13.5) * 1.05, (i % 2) * -0.1, 0]}>
             <sphereGeometry args={[0.045, 6, 6]} />
-            <meshBasicMaterial color={i % 3 === 0 ? '#FFD700' : i % 3 === 1 ? '#FF4500' : '#00E5FF'} />
+            <meshStandardMaterial
+              color={i % 3 === 0 ? '#FFD700' : i % 3 === 1 ? '#FF4500' : '#00E5FF'}
+              emissive={i % 3 === 0 ? '#FFD700' : i % 3 === 1 ? '#FF4500' : '#00E5FF'}
+              emissiveIntensity={1.5}
+            />
           </mesh>
         ))}
       </group>

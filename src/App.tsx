@@ -11,11 +11,21 @@ export const App: React.FC = () => {
   const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
-    setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    const hasTouch = 'ontouchstart' in window || (Boolean(navigator.maxTouchPoints) && navigator.maxTouchPoints > 0);
+    setIsTouchDevice(hasTouch);
   }, []);
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#0A0A1A] select-none">
+    <div
+      className="fixed inset-0 w-full h-full overflow-hidden bg-[#0A0A1A] select-none touch-none"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        width: '100%',
+        height: '100dvh',
+        overflow: 'hidden',
+      }}
+    >
       {/* 3D First-Person Diwali Canvas */}
       <DiwaliWorld />
 

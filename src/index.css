@@ -50,6 +50,10 @@
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
   }
 
   body {
@@ -58,7 +62,24 @@
     color: var(--ivory);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow-x: hidden;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  #root {
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    position: absolute;
+    inset: 0;
   }
 
   /* Custom scrollbar for festive feel */

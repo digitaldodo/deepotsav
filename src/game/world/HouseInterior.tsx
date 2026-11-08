@@ -9,36 +9,20 @@ export const HouseInterior: React.FC = () => {
     setActivePrompt,
     giftBoxOpened,
     openGiftBox,
-    inspectedPhoto,
-    setInspectedPhoto,
   } = useGameState();
 
-  // Check proximity for gift box and photo frames
+  // Check proximity for gift box
   useFrame(() => {
     // Proximity to coffee table gift box at [ -5.5, 0.8, -3 ]
     const distToGift = Math.hypot(playerPosition[0] - (-5.5), playerPosition[2] - (-3));
     if (distToGift < 2.0 && !giftBoxOpened) {
       setActivePrompt({
         id: 'open-gift',
-        label: 'Open Diwali Gift Box 🎁',
-        subtext: 'Press [E] or Tap',
+        label: 'Open Festive Gift Box 🎁',
+        subtext: 'Press [E] or Tap to reveal blessing inside',
         action: () => {
-          audioManager.playEatSweet();
+          audioManager.playGiftOpen();
           openGiftBox();
-        },
-      });
-    }
-
-    // Proximity to photo frame on sideboard at [ 0, 1.2, -6.8 ]
-    const distToPhoto = Math.hypot(playerPosition[0] - 0, playerPosition[2] - (-6.2));
-    if (distToPhoto < 2.0) {
-      setActivePrompt({
-        id: 'inspect-photo',
-        label: inspectedPhoto ? 'Put Down Photo' : 'Inspect Family Diwali Photo 🖼️',
-        subtext: 'Press [E] or Tap',
-        action: () => {
-          audioManager.playDiyaLight();
-          setInspectedPhoto(inspectedPhoto ? null : 'Diwali Family Gathering 2026');
         },
       });
     }
@@ -92,7 +76,7 @@ export const HouseInterior: React.FC = () => {
       {/* Traditional Indian Wooden Sofa / Diwan */}
       <group position={[-5.5, 0.45, -5.2]}>
         {/* Base Bench */}
-        <mesh castShadow receiveShadow>
+        <mesh position={[0, 0, 0]} castShadow receiveShadow>
           <boxGeometry args={[3.4, 0.5, 1.2]} />
           <meshStandardMaterial color="#4A2511" roughness={0.5} />
         </mesh>
@@ -134,28 +118,54 @@ export const HouseInterior: React.FC = () => {
           ))
         )}
 
-        {/* Decorative Gift Box on Table */}
+        {/* ==============================================================
+            PHYSICAL 3D GIFT BOX WITH ANIMATING LID & REVEAL
+            ============================================================== */}
         <group position={[0, 0.55, 0]}>
-          <mesh castShadow>
-            <boxGeometry args={[0.45, giftBoxOpened ? 0.12 : 0.35, 0.45]} />
-            <meshStandardMaterial color="#C70039" roughness={0.3} metalness={0.2} />
+          {/* Box Bottom */}
+          <mesh position={[0, 0, 0]} castShadow>
+            <boxGeometry args={[0.45, 0.22, 0.45]} />
+            <meshStandardMaterial color="#990026" roughness={0.3} metalness={0.2} />
           </mesh>
-          {/* Gold Ribbon */}
-          <mesh position={[0, giftBoxOpened ? 0.07 : 0.18, 0]}>
-            <boxGeometry args={[0.47, 0.02, 0.08]} />
-            <meshStandardMaterial color="#FFD700" metalness={0.7} roughness={0.2} />
-          </mesh>
-          <mesh position={[0, giftBoxOpened ? 0.07 : 0.18, 0]}>
-            <boxGeometry args={[0.08, 0.02, 0.47]} />
-            <meshStandardMaterial color="#FFD700" metalness={0.7} roughness={0.2} />
-          </mesh>
+
+          {/* Box Lid (Lifts and tilts off when opened) */}
+          <group
+            position={[0, giftBoxOpened ? 0.38 : 0.12, giftBoxOpened ? 0.18 : 0]}
+            rotation={[giftBoxOpened ? -0.4 : 0, 0, giftBoxOpened ? 0.2 : 0]}
+          >
+            <mesh castShadow>
+              <boxGeometry args={[0.48, 0.06, 0.48]} />
+              <meshStandardMaterial color="#C70039" roughness={0.3} metalness={0.2} />
+            </mesh>
+            {/* Gold Ribbon Cross on Lid */}
+            <mesh position={[0, 0.035, 0]}>
+              <boxGeometry args={[0.49, 0.01, 0.09]} />
+              <meshStandardMaterial color="#FFD700" metalness={0.8} roughness={0.2} />
+            </mesh>
+            <mesh position={[0, 0.035, 0]}>
+              <boxGeometry args={[0.09, 0.01, 0.49]} />
+              <meshStandardMaterial color="#FFD700" metalness={0.8} roughness={0.2} />
+            </mesh>
+          </group>
+
+          {/* Revealed Auspicious 24K Gold Coin inside box */}
           {giftBoxOpened && (
-            <group position={[0, 0.25, 0]}>
-              <mesh>
-                <sphereGeometry args={[0.08, 12, 12]} />
-                <meshBasicMaterial color="#FFD700" />
+            <group position={[0, 0.12, 0]}>
+              <mesh rotation={[Math.PI / 4, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.09, 0.09, 0.015, 24]} />
+                <meshStandardMaterial
+                  color="#FFD700"
+                  metalness={0.95}
+                  roughness={0.15}
+                  emissive="#FFD700"
+                  emissiveIntensity={0.6}
+                />
               </mesh>
-              <pointLight color="#FFD700" intensity={1.5} distance={2.5} />
+              {/* Handwritten Blessing Parchment */}
+              <mesh position={[0, -0.04, 0]} rotation={[-Math.PI / 2, 0, 0.1]}>
+                <planeGeometry args={[0.28, 0.22]} />
+                <meshStandardMaterial color="#FFF8DC" roughness={0.7} />
+              </mesh>
             </group>
           )}
         </group>
@@ -174,7 +184,7 @@ export const HouseInterior: React.FC = () => {
             <boxGeometry args={[0.6, 0.45, 0.04]} />
             <meshStandardMaterial color="#DAA520" metalness={0.8} roughness={0.2} />
           </mesh>
-          {/* Picture insert */}
+          {/* Picture insert with warm painting */}
           <mesh position={[0, 0, 0.025]}>
             <planeGeometry args={[0.5, 0.36]} />
             <meshStandardMaterial color="#FFE4B5" roughness={0.5} />
@@ -182,11 +192,10 @@ export const HouseInterior: React.FC = () => {
         </group>
       </group>
 
-      {/* Warm Living Room Chandelier Light */}
-      <pointLight position={[-5.5, 4.2, -4]} color="#FFA500" intensity={1.8} distance={12} decay={2} castShadow />
-      <pointLight position={[5, 4.2, -5]} color="#FFA500" intensity={1.8} distance={12} decay={2} castShadow />
+      {/* Single consolidated warm living room ambient point light */}
+      <pointLight position={[0, 4.2, -4.5]} color="#FFA500" intensity={1.6} distance={14} decay={2} />
 
-      {/* Festive Hanging Brass Bells & Shubh-Labh on interior wall */}
+      {/* Festive Hanging Brass Shubh-Labh on interior wall */}
       <mesh position={[0, 4.2, -13.7]}>
         <circleGeometry args={[0.45, 24]} />
         <meshStandardMaterial color="#B8860B" metalness={0.8} roughness={0.2} />

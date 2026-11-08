@@ -253,7 +253,111 @@ class SoundEngine {
     }, 400);
   }
 
-  // 7. Ambient Festive Music Drone (Indian Tanpura / Raag Yaman Harmonics)
+  // 7. Powder Scoop / Pickup Sound
+  playPowderPickup() {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(540, now + 0.15);
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  }
+
+  // 8. Powder Sprinkle on 3D Rangoli
+  playPowderSprinkle() {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const bufferSize = ctx.sampleRate * 0.25;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.08));
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1800, ctx.currentTime);
+    filter.Q.setValueAtTime(3.0, ctx.currentTime);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.22, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.sfxGain);
+    noise.start();
+  }
+
+  // 9. Celebratory Rangoli Completed Chimes
+  playRangoliCompleteChime() {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+    const now = ctx.currentTime;
+
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const startTime = now + idx * 0.12;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.2);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(startTime);
+      osc.stop(startTime + 1.2);
+    });
+  }
+
+  // 10. Gift Box Opening Sound
+  playGiftOpen() {
+    if (this.isMuted) return;
+    const ctx = this.initContext();
+    if (!ctx || !this.sfxGain) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.35);
+
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.start(now);
+    osc.stop(now + 0.45);
+  }
+
+  // 11. Ambient Festive Music Drone (Indian Tanpura / Raag Yaman Harmonics)
   private startAmbientMusic() {
     this.stopAmbientMusic();
     const ctx = this.initContext();
